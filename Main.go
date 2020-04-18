@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
+	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -16,12 +18,20 @@ const SERV_IP = "ip"
 const SERV_PORT = "port"
 const SERV_LAST_SEEN = "last_seen"
 
+
 // Called by servers to let clients know they exist
 func register(c *gin.Context) {
+	// $TODO This needs error checking
+	body, _ := ioutil.ReadAll(c.Request.Body)
+	severInfoMap := make(map[string]string)
+	_ = json.Unmarshal(body, &severInfoMap)
+
+	//print(string(body))
+
 	// Pull data out of request
-	name := c.PostForm(SERV_NAME)
-	ip := c.PostForm(SERV_IP)
-	port := c.PostForm(SERV_PORT)
+	name := severInfoMap[SERV_NAME]
+	ip := severInfoMap[SERV_IP]
+	port := severInfoMap[SERV_PORT]
 
 	// Create our local representation
 	serverInfo := map[string]string {
@@ -45,8 +55,14 @@ func list(c *gin.Context) {
 	// Remove old servers
 	pruneServers()
 
+	// Marshall the servers into a list for JSON
+	var serverList []map[string]string
+	for _, value := range servers {
+		serverList = append(serverList, value)
+	}
+
 	// Send server list to client
-	c.JSON(http.StatusOK, servers)
+	c.JSON(http.StatusOK, serverList)
 }
 
 // Remove servers that we haven't seen in a while
