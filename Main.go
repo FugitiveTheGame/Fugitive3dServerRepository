@@ -13,6 +13,8 @@ import (
 var servers = make(map[string]map[string]string)
 
 const STALE_THRESHOLD = time.Duration(60 * time.Second)
+
+// Json keys expected from the client
 const SERV_NAME = "name"
 const SERV_IP = "ip"
 const SERV_PORT = "port"
@@ -26,6 +28,7 @@ func register(c *gin.Context) {
 	severInfoMap := make(map[string]string)
 	_ = json.Unmarshal(body, &severInfoMap)
 
+	// Debug printing
 	//print(string(body))
 
 	// Pull data out of request
