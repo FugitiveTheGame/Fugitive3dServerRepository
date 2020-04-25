@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,7 +23,9 @@ import (
 // Our in-memory storage for registered servers
 var servers = make(map[string]map[string]string)
 
-const STALE_THRESHOLD = time.Duration(60 * time.Second)
+var mux = &sync.RWMutex{}
+
+const STALE_THRESHOLD = time.Duration(5 * time.Second)
 
 // Json keys expected from the client
 const SERV_NAME = "name"
@@ -109,7 +112,9 @@ func register(c *gin.Context) {
 			if i == ip {
 				fmt.Println("This server is already registered.")
 				c.JSON(200, gin.H{"result": "updated"})
+				mux.Lock()
 				servers[ip] = serverInfo
+				mux.Unlock()
 				return
 			}
 		}
@@ -125,7 +130,9 @@ func register(c *gin.Context) {
 	}
 
 	// Store, and replace any old representation
+	mux.Lock()
 	servers[ip] = serverInfo
+	mux.Unlock()
 }
 
 // Called by clients to get a list of active servers
@@ -135,9 +142,12 @@ func list(c *gin.Context) {
 
 	// Marshall the servers into a list for JSON
 	var serverList = make([]map[string]string, 0)
+
+	mux.RLock()
 	for _, value := range servers {
 		serverList = append(serverList, value)
 	}
+	mux.RUnlock()
 
 	// Send server list to client
 	c.JSON(http.StatusOK, serverList)
@@ -150,7 +160,7 @@ func getip(c *gin.Context) {
 		fmt.Println(err.Error())
 		c.JSON(500, gin.H{"result": "internal server error"})
 	} else {
-		fmt.Println("Incoming request /getip:", ip + ":" + port)
+		fmt.Println("Incoming request /getip:", ip+":"+port)
 		// Only return the IP, even though we have their source ephemeral port.
 		c.JSON(200, gin.H{"ip": ip})
 	}
@@ -159,25 +169,30 @@ func getip(c *gin.Context) {
 // Remove servers that we haven't seen in a while
 // TODO: needs to move to a channel/async
 func pruneServers() {
-	now := time.Now()
+	for {
+		now := time.Now()
 
-	// Check each server
-	for ip, server := range servers {
+		// Check each server
+		for ip, server := range servers {
 
-		// Parse the last seen time, then check if it's too old
-		lastSeen, _ := time.Parse(time.RFC3339, server[SERV_LAST_SEEN])
-		if lastSeen.Add(STALE_THRESHOLD).Before(now) {
-			// Too old, remove server
-			s := fmt.Sprintf("Pruning IP: %s", ip)
-			fmt.Println(s)
-			delete(servers, ip)
+			// Parse the last seen time, then check if it's too old
+			lastSeen, _ := time.Parse(time.RFC3339, server[SERV_LAST_SEEN])
+			if lastSeen.Add(STALE_THRESHOLD).Before(now) {
+				// Too old, remove server
+				s := fmt.Sprintf("Pruning IP: %s", ip)
+				fmt.Println(s)
+				mux.Lock()
+				delete(servers, ip)
+				mux.Unlock()
+			}
 		}
 	}
+	time.Sleep(1 * time.Second)
 }
 
 func main() {
 	// Allow users to provide arguments on the CLI
-    var ipAddr string
+	var ipAddr string
 	var portNum string
 
 	flag.StringVar(&ipAddr, "a", "0.0.0.0", "IP address for repository  to listen on")
@@ -195,8 +210,6 @@ func main() {
 	router.POST("/register", register)
 	router.GET("/list", list)
 	router.GET("/getip", getip)
-
-	mux := &sync.RWMutex{}
 
 	// Start her up!
 	p := fmt.Sprintf("%s:%s", ipAddr, portNum)
