@@ -143,6 +143,19 @@ func list(c *gin.Context) {
 	c.JSON(http.StatusOK, serverList)
 }
 
+// Gather the source IP from an incoming HTTP request.
+func getip(c *gin.Context) {
+	ip, port, err := net.SplitHostPort(c.Request.RemoteAddr)
+	if err != nil {
+		fmt.Println(err.Error())
+		c.JSON(500, gin.H{"result": "internal server error"})
+	} else {
+		fmt.Println("Incoming request /getip:", ip + ":" + port)
+		// Only return the IP, even though we have their source ephemeral port.
+		c.JSON(200, gin.H{"ip": ip})
+	}
+}
+
 // Remove servers that we haven't seen in a while
 // TODO: needs to move to a channel/async
 func pruneServers() {
@@ -164,8 +177,10 @@ func pruneServers() {
 
 func main() {
 	// Allow users to provide arguments on the CLI
+    var ipAddr string
 	var portNum string
 
+	flag.StringVar(&ipAddr, "a", "0.0.0.0", "IP address for repository  to listen on")
 	flag.StringVar(&portNum, "p", "8080", "TCP port for repository to listen on")
 	flag.Parse()
 
@@ -179,8 +194,9 @@ func main() {
 	// Register endpoints
 	router.POST("/register", register)
 	router.GET("/list", list)
+	router.GET("/getip", getip)
 
 	// Start her up!
-	p := fmt.Sprintf(":%s", portNum)
+	p := fmt.Sprintf("%s:%s", ipAddr, portNum)
 	router.Run(p)
 }
