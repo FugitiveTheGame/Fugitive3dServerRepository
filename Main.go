@@ -134,7 +134,7 @@ func list(c *gin.Context) {
 	pruneServers()
 
 	// Marshall the servers into a list for JSON
-	var serverList []map[string]string
+	var serverList = make([]map[string]string, 0)
 	for _, value := range servers {
 		serverList = append(serverList, value)
 	}
