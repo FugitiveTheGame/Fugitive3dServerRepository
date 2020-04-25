@@ -9,6 +9,7 @@ Servers registering for the first time are returned a 201/Created with a JSON re
 {
   "result": "created"
 }
+```
 
 When they register again, if it's within 60 seconds of the last update, they are returned a 200/OK with a JSON response of:
 

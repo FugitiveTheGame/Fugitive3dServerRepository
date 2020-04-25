@@ -196,6 +196,8 @@ func main() {
 	router.GET("/list", list)
 	router.GET("/getip", getip)
 
+	mux := &sync.RWMutex{}
+
 	// Start her up!
 	p := fmt.Sprintf("%s:%s", ipAddr, portNum)
 	router.Run(p)
