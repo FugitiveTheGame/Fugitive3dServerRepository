@@ -108,6 +108,8 @@ func register(c *gin.Context) {
 	// run simple validation before we register it.
 	if validateEntry(name, ip, port) {
 		// Input was valid. Are they new or updating?
+		// only thing you change is the message you send back to the user
+		// check for membership, don't iterate
 		for i, _ := range servers {
 			if i == ip {
 				fmt.Println("This server is already registered.")
@@ -138,7 +140,7 @@ func register(c *gin.Context) {
 // Called by clients to get a list of active servers
 func list(c *gin.Context) {
 	// Remove old servers
-	pruneServers()
+	//pruneServers()
 
 	// Marshall the servers into a list for JSON
 	var serverList = make([]map[string]string, 0)
@@ -186,8 +188,8 @@ func pruneServers() {
 				mux.Unlock()
 			}
 		}
+		time.Sleep(1 * time.Second)
 	}
-	time.Sleep(1 * time.Second)
 }
 
 func main() {
@@ -210,6 +212,8 @@ func main() {
 	router.POST("/register", register)
 	router.GET("/list", list)
 	router.GET("/getip", getip)
+
+	go pruneServers()
 
 	// Start her up!
 	p := fmt.Sprintf("%s:%s", ipAddr, portNum)
