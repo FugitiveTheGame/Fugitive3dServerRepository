@@ -44,7 +44,6 @@ func verifyIp(ip string) bool {
 func verifyPort(port string) bool {
 	// Ensure the port is between 1024 and 65535 (applies in TCP and UDP)
 	if n, err := strconv.Atoi(port); err == nil {
-		fmt.Println(n)
 		if 1024 > n || n > 65535 {
 			// TODO: be a little more specific so they know what to do
 			fmt.Fprintln(os.Stdout, port, "is not a valid port number.\n")
@@ -93,7 +92,7 @@ func register(c *gin.Context) {
 	ip := severInfoMap[SERV_IP]
 	port := severInfoMap[SERV_PORT]
 
-	fmt.Println("A client is registering\n")
+	fmt.Println("A server is registering.")
 
 	// Create our local representation
 	serverInfo := map[string]string{
