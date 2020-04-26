@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/gin-contrib/gzip"
-	"github.com/gin-gonic/gin"
 	"io"
 	"io/ioutil"
 	"net"
@@ -15,6 +13,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gin-contrib/gzip"
+	"github.com/gin-gonic/gin"
 )
 
 // test it out
@@ -86,7 +87,7 @@ func validateEntry(ctx *gin.Context, jname string, jip string, jport string) boo
 		fmt.Fprintln(os.Stdout, jname, "must be between 3 and 32 characters.")
 		return false
 	}
-	b := verifyIp(ip) // their detected source IP
+	b := verifyIp(ip)      // their detected source IP
 	c := verifyPort(jport) // their port provided in the payload
 	if !b || !c {
 		return false
