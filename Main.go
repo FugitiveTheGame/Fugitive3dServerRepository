@@ -61,21 +61,44 @@ func cleanName(servername string) string {
 	return s
 }
 
-func validateEntry(name string, ip string, port string) bool {
+func validateEntry(ctx *gin.Context, jname string, jip string, jport string) bool {
 	// Run simple input validation
+	// ctx == the gin context, for nabbing their source IP
+	// info = the serverInfo map of their JSON request data
+
+	// Your name should be in our required range.
+	// Your IP needs to be a real IPv4 address.
+	// Your jport needs to be in the ephemeral range.
+	// Your incoming source IP must match the IP in your payload.
+
+	// ip == their source client IP
+	// port == source port, only useful for logging/debugging
+	ip, _, _ := net.SplitHostPort(ctx.Request.RemoteAddr)
+
+	fmt.Fprintln(os.Stdout, "Source IP: "+ip+" Payload IP: "+jip)
+	if ip != jip {
+		return false // their source IP != JSON IP value, spoofing/typo case
+	}
 
 	// clean the name string and measure length here.
-	a := cleanName(name)
+	a := cleanName(jname)
 	if 3 > len(a) || len(a) > 32 {
-		fmt.Fprintln(os.Stdout, name, "must be between 3 and 32 characters.")
+		fmt.Fprintln(os.Stdout, jname, "must be between 3 and 32 characters.")
 		return false
 	}
-	b := verifyIp(ip)
-	c := verifyPort(port)
+	b := verifyIp(ip) // their detected source IP
+	c := verifyPort(jport) // their port provided in the payload
 	if !b || !c {
 		return false
 	}
 	return true
+}
+
+// Each server entry needs to be keyed on 'detected source ip:advertised port' (string)
+// This will allow the same IP to have servers running on multiple ports, if desired.
+func createKey(ip string, port string) string {
+	key := ip + ":" + port
+	return key
 }
 
 // Called by servers to let clients know they exist
@@ -105,10 +128,14 @@ func register(c *gin.Context) {
 	}
 
 	// run simple validation before we register it.
-	if validateEntry(name, ip, port) {
+	if validateEntry(c, name, ip, port) {
+		// key is your incoming IP:advertised port (string)
+		key := createKey(ip, port)
+
 		// Input was valid. Are they new or updating?
 		// only thing you change is the message you send back to the user
-		if _, ok := servers[ip]; ok {
+		mux.RLock()
+		if _, ok := servers[key]; ok {
 			//updating
 			fmt.Println("This server is already registered.")
 			c.JSON(200, gin.H{"result": "updated"})
@@ -117,8 +144,10 @@ func register(c *gin.Context) {
 			fmt.Println("New server registered!")
 			c.JSON(201, gin.H{"result": "registered"})
 		}
+		mux.RUnlock()
+
 		mux.Lock()
-		servers[ip] = serverInfo
+		servers[key] = serverInfo
 		mux.Unlock()
 	} else {
 		// They failed payload validation.
@@ -163,6 +192,45 @@ func pruneInterval(stale int) time.Duration {
 	return time.Duration(d * time.Second)
 }
 
+// Allow servers to remove _themselves_ from the list when requested.
+// They cannot remove entries for IP addresses other than their origin IP.
+// Only jerks do that.
+func remove(c *gin.Context) {
+	body, _ := ioutil.ReadAll(c.Request.Body)
+	severInfoMap := make(map[string]string)
+	_ = json.Unmarshal(body, &severInfoMap)
+
+	ip := severInfoMap[SERV_IP]
+	port := severInfoMap[SERV_PORT]
+	var name = "not important"
+
+	fmt.Println("A server is registering.")
+
+	if validateEntry(c, name, ip, port) {
+		// key is your incoming IP:advertised port (string)
+		key := createKey(ip, port)
+
+		mux.RLock()
+		if _, ok := servers[key]; ok {
+			// It was found, remove it.
+			fmt.Println("This server is being removed.")
+			c.JSON(200, gin.H{"result": "success"})
+		} else {
+			// Report back to user: it wasn't removed because it wasn't found.
+			fmt.Println("The server was not found.")
+			c.JSON(404, gin.H{"result": "failure"})
+		}
+		mux.RUnlock()
+
+		mux.Lock()
+		delete(servers, key)
+		mux.Unlock()
+	} else {
+		// They failed payload validation.
+		c.JSON(http.StatusBadRequest, gin.H{"result": "name, IP, or port was invalid!"})
+	}
+}
+
 // Remove servers that we haven't seen in a while
 // TODO: needs to move to a channel/async
 func pruneServers(staleThreshold int) {
@@ -171,16 +239,16 @@ func pruneServers(staleThreshold int) {
 		now := time.Now()
 
 		// Check each server
-		for ip, server := range servers {
+		for key, server := range servers {
 
 			// Parse the last seen time, then check if it's too old
 			lastSeen, _ := time.Parse(time.RFC3339, server[SERV_LAST_SEEN])
 			if lastSeen.Add(pruneInterval * 2).Before(now) {
 				// Too old, remove server
-				s := fmt.Sprintf("Pruning IP: %s", ip)
+				s := fmt.Sprintf("Pruning IP: %s", key)
 				fmt.Println(s)
 				mux.Lock()
-				delete(servers, ip)
+				delete(servers, key)
 				mux.Unlock()
 			}
 		}
@@ -213,6 +281,7 @@ func main() {
 	router.POST("/register", register)
 	router.GET("/list", list)
 	router.GET("/getip", getip)
+	router.DELETE("/remove", remove)
 
 	// thread w/locking for the pruning operations
 	go pruneServers(staleThreshold)
