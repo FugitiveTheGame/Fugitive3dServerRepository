@@ -108,6 +108,7 @@ func register(c *gin.Context) {
 	if validateEntry(name, ip, port) {
 		// Input was valid. Are they new or updating?
 		// only thing you change is the message you send back to the user
+		mux.RLock()
 		if _, ok := servers[ip]; ok {
 			//updating
 			fmt.Println("This server is already registered.")
@@ -117,6 +118,8 @@ func register(c *gin.Context) {
 			fmt.Println("New server registered!")
 			c.JSON(201, gin.H{"result": "registered"})
 		}
+		mux.RUnlock()
+
 		mux.Lock()
 		servers[ip] = serverInfo
 		mux.Unlock()
