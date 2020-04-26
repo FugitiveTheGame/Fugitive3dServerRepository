@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,7 +23,7 @@ import (
 // Our in-memory storage for registered servers
 var servers = make(map[string]map[string]string)
 
-const STALE_THRESHOLD = time.Duration(60 * time.Second)
+var mux = &sync.RWMutex{}
 
 // Json keys expected from the client
 const SERV_NAME = "name"
@@ -78,6 +79,7 @@ func validateEntry(name string, ip string, port string) bool {
 }
 
 // Called by servers to let clients know they exist
+// TODO: You really should be able to have multiple servers on one IP.
 func register(c *gin.Context) {
 	// New servers are tracked for 60 seconds unless updated.
 	body, _ := ioutil.ReadAll(c.Request.Body)
@@ -105,39 +107,38 @@ func register(c *gin.Context) {
 	// run simple validation before we register it.
 	if validateEntry(name, ip, port) {
 		// Input was valid. Are they new or updating?
-		for i, _ := range servers {
-			if i == ip {
-				fmt.Println("This server is already registered.")
-				c.JSON(200, gin.H{"result": "updated"})
-				servers[ip] = serverInfo
-				return
-			}
+		// only thing you change is the message you send back to the user
+		if _, ok := servers[ip]; ok {
+			//updating
+			fmt.Println("This server is already registered.")
+			c.JSON(200, gin.H{"result": "updated"})
+		} else {
+			// Report back to the uer: new server was created
+			fmt.Println("New server registered!")
+			c.JSON(201, gin.H{"result": "registered"})
 		}
-
-		// Report back to the user: new server was created
-		fmt.Println("New server registered!")
-		c.JSON(201, gin.H{
-			"result": "registered",
-		})
+		mux.Lock()
+		servers[ip] = serverInfo
+		mux.Unlock()
 	} else {
 		// They failed payload validation.
 		c.JSON(http.StatusBadRequest, gin.H{"result": "name, IP, or port was invalid!"})
 	}
-
-	// Store, and replace any old representation
-	servers[ip] = serverInfo
 }
 
 // Called by clients to get a list of active servers
 func list(c *gin.Context) {
 	// Remove old servers
-	pruneServers()
+	//pruneServers()
 
 	// Marshall the servers into a list for JSON
 	var serverList = make([]map[string]string, 0)
+
+	mux.RLock()
 	for _, value := range servers {
 		serverList = append(serverList, value)
 	}
+	mux.RUnlock()
 
 	// Send server list to client
 	c.JSON(http.StatusOK, serverList)
@@ -150,39 +151,56 @@ func getip(c *gin.Context) {
 		fmt.Println(err.Error())
 		c.JSON(500, gin.H{"result": "internal server error"})
 	} else {
-		fmt.Println("Incoming request /getip:", ip + ":" + port)
+		fmt.Println("Incoming request /getip:", ip+":"+port)
 		// Only return the IP, even though we have their source ephemeral port.
 		c.JSON(200, gin.H{"ip": ip})
 	}
 }
 
+// prune interval is always half the stale threshold
+func pruneInterval(stale int) time.Duration {
+	var d = time.Duration(stale / 2)
+	return time.Duration(d * time.Second)
+}
+
 // Remove servers that we haven't seen in a while
 // TODO: needs to move to a channel/async
-func pruneServers() {
-	now := time.Now()
+func pruneServers(staleThreshold int) {
+	var pruneInterval = pruneInterval(staleThreshold)
+	for {
+		now := time.Now()
 
-	// Check each server
-	for ip, server := range servers {
+		// Check each server
+		for ip, server := range servers {
 
-		// Parse the last seen time, then check if it's too old
-		lastSeen, _ := time.Parse(time.RFC3339, server[SERV_LAST_SEEN])
-		if lastSeen.Add(STALE_THRESHOLD).Before(now) {
-			// Too old, remove server
-			s := fmt.Sprintf("Pruning IP: %s", ip)
-			fmt.Println(s)
-			delete(servers, ip)
+			// Parse the last seen time, then check if it's too old
+			lastSeen, _ := time.Parse(time.RFC3339, server[SERV_LAST_SEEN])
+			if lastSeen.Add(pruneInterval * 2).Before(now) {
+				// Too old, remove server
+				s := fmt.Sprintf("Pruning IP: %s", ip)
+				fmt.Println(s)
+				mux.Lock()
+				delete(servers, ip)
+				mux.Unlock()
+			}
 		}
+		time.Sleep(pruneInterval)
 	}
 }
 
 func main() {
 	// Allow users to provide arguments on the CLI
-    var ipAddr string
+	var ipAddr string
 	var portNum string
+	var staleThreshold int
 
 	flag.StringVar(&ipAddr, "a", "0.0.0.0", "IP address for repository  to listen on")
 	flag.StringVar(&portNum, "p", "8080", "TCP port for repository to listen on")
+	flag.IntVar(&staleThreshold, "s", 30, "Duration (in seconds) before a server is marked stale")
 	flag.Parse()
+
+	s := fmt.Sprintf("Server starting with arguments: %s:%s staleThreshold=%v", ipAddr, portNum, staleThreshold)
+	fmt.Println(s)
 
 	router := gin.Default()
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
@@ -195,6 +213,9 @@ func main() {
 	router.POST("/register", register)
 	router.GET("/list", list)
 	router.GET("/getip", getip)
+
+	// thread w/locking for the pruning operations
+	go pruneServers(staleThreshold)
 
 	// Start her up!
 	p := fmt.Sprintf("%s:%s", ipAddr, portNum)
