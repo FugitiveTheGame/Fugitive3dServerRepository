@@ -135,6 +135,7 @@ func register(c *gin.Context) {
 		// Input was valid. Are they new or updating?
 		// only thing you change is the message you send back to the user
 		mux.RLock()
+
 		if _, ok := servers[key]; ok {
 			//updating
 			fmt.Println("This server is already registered.")
