@@ -21,23 +21,43 @@ import (
 // test it out
 // curl -d '{"name":"special server", "ip":"1.2.3.5", "port":"45677"}' -H "Content-Type: application/json" -X POST localhost:8080/register
 
+// timeFormatJSON defines the format that we use for time formatting in JSON.
+const timeFormatJSON = time.RFC3339
+
+// jsonTime defines a time.Time with custom marshalling (embedded for method
+// access, rather than aliasing)
+type jsonTime struct {
+	time.Time
+	// put nothing else here...
+}
+
+// MarshalJSON satisfies the encoding/json.Marshaler interface and customizes
+// the JSON formatting of the jsonTime structure.
+func (t jsonTime) MarshalJSON() ([]byte, error) {
+	formatted := t.Format(timeFormatJSON)
+
+	return json.Marshal(&formatted)
+}
+
+// server defines a structure for our server data.
+type server struct {
+	Name     string   `json:"name"`
+	IP       net.IP   `json:"ip"`
+	Port     int      `json:"port"`
+	LastSeen jsonTime `json:"last_seen"`
+}
+
 // Our in-memory storage for registered servers
-var servers = make(map[string]map[string]string)
+var servers = make(map[string]server)
 
 var mux = &sync.RWMutex{}
 
-// Json keys expected from the client
-const SERV_NAME = "name"
-const SERV_IP = "ip"
-const SERV_PORT = "port"
-const SERV_LAST_SEEN = "last_seen"
-
-func verifyIp(ip string) bool {
+func verifyIP(ip string) bool {
 	// verify the IP address provided is valid.
 	// This just ensures it's _any_ IPv4 address.
 	addr := net.ParseIP(ip)
 	if addr.To4() == nil {
-		fmt.Fprintln(os.Stdout, ip, "is not a valid IPv4 address\n")
+		fmt.Fprintln(os.Stdout, ip, "is not a valid IPv4 address")
 		return false
 	}
 	return true
@@ -48,7 +68,7 @@ func verifyPort(port string) bool {
 	if n, err := strconv.Atoi(port); err == nil {
 		if 1024 > n || n > 65535 {
 			// TODO: be a little more specific so they know what to do
-			fmt.Fprintln(os.Stdout, port, "is not a valid port number.\n")
+			fmt.Fprintln(os.Stdout, port, "is not a valid port number")
 			return false
 		}
 		return true
@@ -87,7 +107,7 @@ func validateEntry(ctx *gin.Context, jname string, jip string, jport string) boo
 		fmt.Fprintln(os.Stdout, jname, "must be between 3 and 32 characters.")
 		return false
 	}
-	b := verifyIp(ip)      // their detected source IP
+	b := verifyIP(ip)      // their detected source IP
 	c := verifyPort(jport) // their port provided in the payload
 	if !b || !c {
 		return false
@@ -105,33 +125,27 @@ func createKey(ip string, port string) string {
 // Called by servers to let clients know they exist
 // TODO: You really should be able to have multiple servers on one IP.
 func register(c *gin.Context) {
+	var serverData server
+
 	// New servers are tracked for 60 seconds unless updated.
 	body, _ := ioutil.ReadAll(c.Request.Body)
-	severInfoMap := make(map[string]string)
-	_ = json.Unmarshal(body, &severInfoMap)
+	if err := json.Unmarshal(body, &serverData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"result": "invalid request JSON"})
+	}
+
+	// Update the last-seen value to "now"
+	serverData.LastSeen = jsonTime{time.Now()}
 
 	// Debug printing
-	//print(string(body))
-
-	// Pull data out of request
-	name := severInfoMap[SERV_NAME]
-	ip := severInfoMap[SERV_IP]
-	port := severInfoMap[SERV_PORT]
+	//fmt.Println(string(body), serverData)
 
 	fmt.Println("A server is registering.")
 
-	// Create our local representation
-	serverInfo := map[string]string{
-		SERV_NAME:      name,
-		SERV_IP:        ip,
-		SERV_PORT:      port,
-		SERV_LAST_SEEN: time.Now().Format(time.RFC3339),
-	}
-
 	// run simple validation before we register it.
-	if validateEntry(c, name, ip, port) {
+	// TODO: Change validation interface
+	if validateEntry(c, serverData.Name, serverData.IP.String(), strconv.Itoa(serverData.Port)) {
 		// key is your incoming IP:advertised port (string)
-		key := createKey(ip, port)
+		key := createKey(serverData.IP.String(), strconv.Itoa(serverData.Port))
 
 		// Input was valid. Are they new or updating?
 		// only thing you change is the message you send back to the user
@@ -149,7 +163,7 @@ func register(c *gin.Context) {
 		mux.RUnlock()
 
 		mux.Lock()
-		servers[key] = serverInfo
+		servers[key] = serverData
 		mux.Unlock()
 	} else {
 		// They failed payload validation.
@@ -163,7 +177,7 @@ func list(c *gin.Context) {
 	//pruneServers()
 
 	// Marshall the servers into a list for JSON
-	var serverList = make([]map[string]string, 0)
+	var serverList = make([]server, 0)
 
 	mux.RLock()
 	for _, value := range servers {
@@ -198,19 +212,23 @@ func pruneInterval(stale int) time.Duration {
 // They cannot remove entries for IP addresses other than their origin IP.
 // Only jerks do that.
 func remove(c *gin.Context) {
-	body, _ := ioutil.ReadAll(c.Request.Body)
-	severInfoMap := make(map[string]string)
-	_ = json.Unmarshal(body, &severInfoMap)
+	var serverData server
 
-	ip := severInfoMap[SERV_IP]
-	port := severInfoMap[SERV_PORT]
-	var name = "not important"
+	// New servers are tracked for 60 seconds unless updated.
+	body, _ := ioutil.ReadAll(c.Request.Body)
+	if err := json.Unmarshal(body, &serverData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"result": "invalid request JSON"})
+	}
+
+	// Override the name due to our validation mechanism
+	// TODO: Remove this override in favor of a different validation mechanism
+	serverData.Name = "not important"
 
 	fmt.Println("A server is registering.")
 
-	if validateEntry(c, name, ip, port) {
+	if validateEntry(c, serverData.Name, serverData.IP.String(), strconv.Itoa(serverData.Port)) {
 		// key is your incoming IP:advertised port (string)
-		key := createKey(ip, port)
+		key := createKey(serverData.IP.String(), strconv.Itoa(serverData.Port))
 
 		mux.RLock()
 		if _, ok := servers[key]; ok {
@@ -244,8 +262,7 @@ func pruneServers(staleThreshold int) {
 		for key, server := range servers {
 
 			// Parse the last seen time, then check if it's too old
-			lastSeen, _ := time.Parse(time.RFC3339, server[SERV_LAST_SEEN])
-			if lastSeen.Add(pruneInterval * 2).Before(now) {
+			if server.LastSeen.Add(pruneInterval * 2).Before(now) {
 				// Too old, remove server
 				s := fmt.Sprintf("Pruning IP: %s", key)
 				fmt.Println(s)
@@ -261,15 +278,15 @@ func pruneServers(staleThreshold int) {
 func main() {
 	// Allow users to provide arguments on the CLI
 	var ipAddr string
-	var portNum string
+	var portNum int
 	var staleThreshold int
 
 	flag.StringVar(&ipAddr, "a", "0.0.0.0", "IP address for repository  to listen on")
-	flag.StringVar(&portNum, "p", "8080", "TCP port for repository to listen on")
+	flag.IntVar(&portNum, "p", 8080, "TCP port for repository to listen on")
 	flag.IntVar(&staleThreshold, "s", 30, "Duration (in seconds) before a server is marked stale")
 	flag.Parse()
 
-	s := fmt.Sprintf("Server starting with arguments: %s:%s staleThreshold=%v", ipAddr, portNum, staleThreshold)
+	s := fmt.Sprintf("Server starting with arguments: %s:%d staleThreshold=%v", ipAddr, portNum, staleThreshold)
 	fmt.Println(s)
 
 	router := gin.Default()
@@ -289,6 +306,6 @@ func main() {
 	go pruneServers(staleThreshold)
 
 	// Start her up!
-	p := fmt.Sprintf("%s:%s", ipAddr, portNum)
+	p := fmt.Sprintf("%s:%d", ipAddr, portNum)
 	router.Run(p)
 }
