@@ -278,15 +278,15 @@ func pruneServers(staleThreshold int) {
 func main() {
 	// Allow users to provide arguments on the CLI
 	var ipAddr string
-	var portNum string
+	var portNum int
 	var staleThreshold int
 
 	flag.StringVar(&ipAddr, "a", "0.0.0.0", "IP address for repository  to listen on")
-	flag.StringVar(&portNum, "p", "8080", "TCP port for repository to listen on")
+	flag.IntVar(&portNum, "p", 8080, "TCP port for repository to listen on")
 	flag.IntVar(&staleThreshold, "s", 30, "Duration (in seconds) before a server is marked stale")
 	flag.Parse()
 
-	s := fmt.Sprintf("Server starting with arguments: %s:%s staleThreshold=%v", ipAddr, portNum, staleThreshold)
+	s := fmt.Sprintf("Server starting with arguments: %s:%d staleThreshold=%v", ipAddr, portNum, staleThreshold)
 	fmt.Println(s)
 
 	router := gin.Default()
@@ -306,6 +306,6 @@ func main() {
 	go pruneServers(staleThreshold)
 
 	// Start her up!
-	p := fmt.Sprintf("%s:%s", ipAddr, portNum)
+	p := fmt.Sprintf("%s:%d", ipAddr, portNum)
 	router.Run(p)
 }
