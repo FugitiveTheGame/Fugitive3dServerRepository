@@ -52,12 +52,12 @@ var servers = make(map[string]server)
 
 var mux = &sync.RWMutex{}
 
-func verifyIp(ip string) bool {
+func verifyIP(ip string) bool {
 	// verify the IP address provided is valid.
 	// This just ensures it's _any_ IPv4 address.
 	addr := net.ParseIP(ip)
 	if addr.To4() == nil {
-		fmt.Fprintln(os.Stdout, ip, "is not a valid IPv4 address\n")
+		fmt.Fprintln(os.Stdout, ip, "is not a valid IPv4 address")
 		return false
 	}
 	return true
@@ -68,7 +68,7 @@ func verifyPort(port string) bool {
 	if n, err := strconv.Atoi(port); err == nil {
 		if 1024 > n || n > 65535 {
 			// TODO: be a little more specific so they know what to do
-			fmt.Fprintln(os.Stdout, port, "is not a valid port number.\n")
+			fmt.Fprintln(os.Stdout, port, "is not a valid port number")
 			return false
 		}
 		return true
@@ -107,7 +107,7 @@ func validateEntry(ctx *gin.Context, jname string, jip string, jport string) boo
 		fmt.Fprintln(os.Stdout, jname, "must be between 3 and 32 characters.")
 		return false
 	}
-	b := verifyIp(ip)      // their detected source IP
+	b := verifyIP(ip)      // their detected source IP
 	c := verifyPort(jport) // their port provided in the payload
 	if !b || !c {
 		return false
