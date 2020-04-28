@@ -39,13 +39,107 @@ func (t jsonTime) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&formatted)
 }
 
+// serverID defines the identifier of a particular server.
+type serverID string
+
 // server defines a structure for our server data.
 type server struct {
-	Name        string   `json:"name"`
-	IP          net.IP   `json:"ip"`
-	Port        int      `json:"port"`
-	LastSeen    jsonTime `json:"last_seen"`
-	GameVersion int      `json:"game_version"`
+	IP   net.IP `json:"ip"`
+	Port int    `json:"port"`
+
+	Name        string `json:"name"`
+	GameVersion int    `json:"game_version"`
+
+	LastSeen jsonTime `json:"last_seen"`
+}
+
+// ID returns the serverID for a server, generated based on its internal data.
+func (s *server) ID() serverID {
+	strID := fmt.Sprintf("%s:%d", s.IP, s.Port)
+
+	return serverID(strID)
+}
+
+// serverRepository defines the structure for an in-memory server repository.
+type serverRepository struct {
+	servers map[serverID]server
+
+	mu sync.RWMutex
+}
+
+// newServerRepository returns a pointer to a new initialized serverRepository.
+func newServerRepository() *serverRepository {
+	return &serverRepository{
+		servers: make(map[serverID]server),
+	}
+}
+
+// List returns a slice representation of the servers in the repository.
+func (r *serverRepository) List() []server {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	serverList := make([]server, 0, len(r.servers))
+
+	for _, srv := range r.servers {
+		serverList = append(serverList, srv)
+	}
+
+	return serverList
+}
+
+// Register takes a server and registers it with the repository, returning a
+// bool that represents whether the server already existed or not (true for
+// already exists, false otherwise), and a potential error if the registration
+// failed.
+func (r *serverRepository) Register(srv server) (bool, error) {
+	alreadyExists := false
+	var err error
+
+	// TODO: Validate?
+	id := srv.ID()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	_, alreadyExists = r.servers[id]
+	r.servers[id] = srv
+
+	return alreadyExists, err
+}
+
+// Remove takes a serverID and removes the corresponding server from the
+// repository, returning a bool that represents whether the server existed or
+// not (true for exists, false otherwise).
+func (r *serverRepository) Remove(id serverID) bool {
+	exists := false
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	_, exists = r.servers[id]
+	delete(r.servers, id)
+
+	return exists
+}
+
+// Prune takes a time.Duration representing the threshold of when a server's
+// last-seen "age" should be considered too old, and removes those servers from
+// the repository.
+func (r *serverRepository) Prune(threshold time.Duration) {
+	cutoff := time.Now().Add(-threshold)
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for id, srv := range r.servers {
+		if srv.LastSeen.Before(cutoff) {
+			// TODO: Log with an abstraction
+			fmt.Printf("Pruning server: %s\n", id)
+
+			delete(r.servers, id)
+		}
+	}
 }
 
 // Our in-memory storage for registered servers
