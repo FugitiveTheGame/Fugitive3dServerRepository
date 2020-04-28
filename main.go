@@ -209,13 +209,6 @@ func validateEntry(ctx *gin.Context, jname string, jip string, jport string) boo
 	return true
 }
 
-// Each server entry needs to be keyed on 'detected source ip:advertised port' (string)
-// This will allow the same IP to have servers running on multiple ports, if desired.
-func createKey(ip string, port string) string {
-	key := ip + ":" + port
-	return key
-}
-
 // Called by servers to let clients know they exist
 // TODO: You really should be able to have multiple servers on one IP.
 func register(c *gin.Context) {
@@ -279,12 +272,6 @@ func getip(c *gin.Context) {
 		// Only return the IP, even though we have their source ephemeral port.
 		c.JSON(200, gin.H{"ip": ip})
 	}
-}
-
-// prune interval is always half the stale threshold
-func pruneInterval(stale int) time.Duration {
-	var d = time.Duration(stale / 2)
-	return time.Duration(d * time.Second)
 }
 
 // Allow servers to remove _themselves_ from the list when requested.
