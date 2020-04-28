@@ -41,10 +41,11 @@ func (t jsonTime) MarshalJSON() ([]byte, error) {
 
 // server defines a structure for our server data.
 type server struct {
-	Name     string   `json:"name"`
-	IP       net.IP   `json:"ip"`
-	Port     int      `json:"port"`
-	LastSeen jsonTime `json:"last_seen"`
+	Name        string   `json:"name"`
+	IP          net.IP   `json:"ip"`
+	Port        int      `json:"port"`
+	LastSeen    jsonTime `json:"last_seen"`
+	GameVersion int      `json:"game_version"`
 }
 
 // Our in-memory storage for registered servers
