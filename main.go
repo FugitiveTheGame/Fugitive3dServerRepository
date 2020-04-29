@@ -39,13 +39,27 @@ func (t jsonTime) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&formatted)
 }
 
+// serverAddress defines the structure of a server address.
+type serverAddress struct {
+	IP   net.IP `json:"ip"`
+	Port int    `json:"port"`
+}
+
+// String satisfies the fmt.Stringer interface and returns a string form of the
+// serverAddress structure.
+func (a *serverAddress) String() string {
+	return net.JoinHostPort(
+		a.IP.String(),
+		strconv.Itoa(a.Port),
+	)
+}
+
 // serverID defines the identifier of a particular server.
 type serverID string
 
 // server defines a structure for our server data.
 type server struct {
-	IP   net.IP `json:"ip"`
-	Port int    `json:"port"`
+	serverAddress // embedded to flatten the structure
 
 	Name        string `json:"name"`
 	GameVersion int    `json:"game_version"`
@@ -55,9 +69,7 @@ type server struct {
 
 // ID returns the serverID for a server, generated based on its internal data.
 func (s *server) ID() serverID {
-	strID := fmt.Sprintf("%s:%d", s.IP, s.Port)
-
-	return serverID(strID)
+	return serverID(s.serverAddress.String())
 }
 
 // serverRepository defines the structure for an in-memory server repository.
