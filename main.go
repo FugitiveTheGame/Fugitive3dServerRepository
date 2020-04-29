@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/internal/httpapi"
+	"github.com/FugitiveTheGame/Fugitive3dServerRepository/internal/httpapi/controller"
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo/inmemory"
 	"github.com/gin-gonic/gin"
@@ -41,23 +43,37 @@ func main() {
 	flag.IntVar(&staleThreshold, "s", 30, "Duration (in seconds) before a server is marked stale")
 	flag.Parse()
 
-	s := fmt.Sprintf("Server starting with arguments: %s:%d staleThreshold=%v", ipAddr, portNum, staleThreshold)
+	serveAddr := net.JoinHostPort(ipAddr, strconv.Itoa(portNum))
+
+	s := fmt.Sprintf("Server starting with arguments: %s staleThreshold=%v", serveAddr, staleThreshold)
 	fmt.Println(s)
 
+	router := initApp(staleThreshold)
+
+	http.ListenAndServe(serveAddr, router)
+}
+
+func initApp(staleThreshold int) *httpapi.Router {
 	// Log to a file (overwrite) and stdout
 	f, _ := os.Create("gin-server.log")
 
 	// TODO: This is overriding globally. We should likely use a better scope.
 	gin.DefaultWriter = io.MultiWriter(f, os.Stdout)
 
+	router := httpapi.NewRouter()
+
 	repository := inmemory.NewServerRepository()
 
-	apiServer := httpapi.NewServer(repository)
+	// Register our controllers
+	for _, controller := range []httpapi.Controller{
+		controller.NewReflectionController(),
+		controller.NewServerController(repository),
+	} {
+		router.Control(controller)
+	}
 
 	// thread w/locking for the pruning operations
 	go pruneServers(repository, time.Duration(staleThreshold)*time.Second)
 
-	apiServer.ListenAndServe(
-		net.JoinHostPort(ipAddr, strconv.Itoa(portNum)),
-	)
+	return router
 }
