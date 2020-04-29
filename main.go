@@ -24,6 +24,18 @@ import (
 // timeFormatJSON defines the format that we use for time formatting in JSON.
 const timeFormatJSON = time.RFC3339
 
+// port range min and max values for valid server address ports.
+const (
+	portRangeMin = 1024
+	portRangeMax = 65535
+)
+
+// name length min and max values for valid server names.
+const (
+	nameLengthMin = 3
+	nameLengthMax = 32
+)
+
 // jsonTime defines a time.Time with custom marshalling (embedded for method
 // access, rather than aliasing)
 type jsonTime struct {
@@ -39,13 +51,65 @@ func (t jsonTime) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&formatted)
 }
 
+// serverAddress defines the structure of a server address.
+type serverAddress struct {
+	IP   net.IP `json:"ip"`
+	Port int    `json:"port"`
+}
+
+// parseServerAddress parses a string address into a serverAddress, returning
+// the parsed value and any errors that occurred during parsing.
+func parseServerAddress(s string) (serverAddress, error) {
+	var addr serverAddress
+
+	rawIP, rawPort, err := net.SplitHostPort(s)
+	if err != nil {
+		return addr, err
+	}
+
+	ip := net.ParseIP(rawIP)
+	port, err := strconv.Atoi(rawPort)
+	if err != nil {
+		return addr, fmt.Errorf("invalid port number with err: %w", err)
+	}
+
+	addr = serverAddress{
+		IP:   ip,
+		Port: port,
+	}
+
+	return addr, nil
+}
+
+// String satisfies the fmt.Stringer interface and returns a string form of the
+// serverAddress structure.
+func (a *serverAddress) String() string {
+	return net.JoinHostPort(
+		a.IP.String(),
+		strconv.Itoa(a.Port),
+	)
+}
+
+// Validate runs validations on the value and returns an error if the value is
+// invalid for any reason.
+func (a *serverAddress) Validate() error {
+	if a.IP.To4() == nil {
+		return fmt.Errorf("IP is not a valid IPv4 address")
+	}
+
+	if a.Port < portRangeMin || a.Port > portRangeMax {
+		return fmt.Errorf("port is not within the valid port range of %d-%d", portRangeMin, portRangeMax)
+	}
+
+	return nil
+}
+
 // serverID defines the identifier of a particular server.
 type serverID string
 
 // server defines a structure for our server data.
 type server struct {
-	IP   net.IP `json:"ip"`
-	Port int    `json:"port"`
+	serverAddress // embedded to flatten the structure
 
 	Name        string `json:"name"`
 	GameVersion int    `json:"game_version"`
@@ -55,9 +119,24 @@ type server struct {
 
 // ID returns the serverID for a server, generated based on its internal data.
 func (s *server) ID() serverID {
-	strID := fmt.Sprintf("%s:%d", s.IP, s.Port)
+	return serverID(s.serverAddress.String())
+}
 
-	return serverID(strID)
+// Validate runs validations on the value and returns an error if the value is
+// invalid for any reason.
+func (s *server) Validate() error {
+	if err := s.serverAddress.Validate(); err != nil {
+		return err
+	}
+
+	// TODO: We likely should be cleaning/normalizing inputs when unmarshalling,
+	// rather than during validation.
+	s.Name = strings.TrimSpace(s.Name)
+	if nameLength := len(s.Name); nameLength < nameLengthMin || nameLength > nameLengthMax {
+		return fmt.Errorf("name length must be within range of %d-%d", nameLengthMin, nameLengthMax)
+	}
+
+	return nil
 }
 
 // serverRepository defines the structure for an in-memory server repository.
@@ -96,7 +175,7 @@ func (r *serverRepository) Register(srv server) (bool, error) {
 	alreadyExists := false
 	var err error
 
-	// TODO: Validate?
+	// TODO: Normalize? Validate?
 	id := srv.ID()
 
 	r.mu.Lock()
@@ -146,72 +225,10 @@ func (r *serverRepository) Prune(threshold time.Duration) {
 // TODO: Move away from global references.
 var servers = newServerRepository()
 
-func verifyIP(ip string) bool {
-	// verify the IP address provided is valid.
-	// This just ensures it's _any_ IPv4 address.
-	addr := net.ParseIP(ip)
-	if addr.To4() == nil {
-		fmt.Fprintln(os.Stdout, ip, "is not a valid IPv4 address")
-		return false
-	}
-	return true
-}
-
-func verifyPort(port string) bool {
-	// Ensure the port is between 1024 and 65535 (applies in TCP and UDP)
-	if n, err := strconv.Atoi(port); err == nil {
-		if 1024 > n || n > 65535 {
-			// TODO: be a little more specific so they know what to do
-			fmt.Fprintln(os.Stdout, port, "is not a valid port number")
-			return false
-		}
-		return true
-	}
-	return false
-}
-
-func cleanName(servername string) string {
-	// Trim whitespace and newlines off ends of name
-	s := strings.TrimSpace(servername)
-	return s
-}
-
-func validateEntry(ctx *gin.Context, jname string, jip string, jport string) bool {
-	// Run simple input validation
-	// ctx == the gin context, for nabbing their source IP
-	// info = the serverInfo map of their JSON request data
-
-	// Your name should be in our required range.
-	// Your IP needs to be a real IPv4 address.
-	// Your jport needs to be in the ephemeral range.
-	// Your incoming source IP must match the IP in your payload.
-
-	// ip == their source client IP
-	// port == source port, only useful for logging/debugging
-	ip, _, _ := net.SplitHostPort(ctx.Request.RemoteAddr)
-
-	fmt.Fprintln(os.Stdout, "Source IP: "+ip+" Payload IP: "+jip)
-	if ip != jip {
-		return false // their source IP != JSON IP value, spoofing/typo case
-	}
-
-	// clean the name string and measure length here.
-	a := cleanName(jname)
-	if 3 > len(a) || len(a) > 32 {
-		fmt.Fprintln(os.Stdout, jname, "must be between 3 and 32 characters.")
-		return false
-	}
-	b := verifyIP(ip)      // their detected source IP
-	c := verifyPort(jport) // their port provided in the payload
-	if !b || !c {
-		return false
-	}
-	return true
-}
-
 // Called by servers to let clients know they exist
 // TODO: You really should be able to have multiple servers on one IP.
 func register(c *gin.Context) {
+	requestAddr, _ := parseServerAddress(c.Request.RemoteAddr)
 	var serverData server
 
 	// New servers are tracked for 60 seconds unless updated.
@@ -228,11 +245,17 @@ func register(c *gin.Context) {
 
 	fmt.Println("A server is registering.")
 
-	// run simple validation before we register it.
-	// TODO: Change validation interface
-	if !validateEntry(c, serverData.Name, serverData.IP.String(), strconv.Itoa(serverData.Port)) {
-		// They failed payload validation.
-		c.JSON(http.StatusBadRequest, gin.H{"result": "name, IP, or port was invalid!"})
+	if err := serverData.Validate(); err != nil {
+		fmt.Printf("error during input validation: %v\n", err)
+		c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+		return
+	}
+
+	if !serverData.IP.Equal(requestAddr.IP) {
+		err := fmt.Errorf("request IP address does not match client IP address")
+
+		fmt.Printf("error during request validation: %v\n", err)
+		c.JSON(http.StatusForbidden, gin.H{"result": err.Error()})
 		return
 	}
 
@@ -278,25 +301,32 @@ func getip(c *gin.Context) {
 // They cannot remove entries for IP addresses other than their origin IP.
 // Only jerks do that.
 func remove(c *gin.Context) {
-	var serverData server
+	requestAddr, _ := parseServerAddress(c.Request.RemoteAddr)
+	var serverAddr serverAddress
 
 	// New servers are tracked for 60 seconds unless updated.
 	body, _ := ioutil.ReadAll(c.Request.Body)
-	if err := json.Unmarshal(body, &serverData); err != nil {
+	if err := json.Unmarshal(body, &serverAddr); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"result": "invalid request JSON"})
 	}
 
 	fmt.Println("A server is being removed.")
 
-	// Hard-code the name due to our validation mechanism
-	// TODO: Remove this override in favor of a different validation mechanism
-	serverName := "not important"
-	if !validateEntry(c, serverName, serverData.IP.String(), strconv.Itoa(serverData.Port)) {
-		// They failed payload validation.
-		c.JSON(http.StatusBadRequest, gin.H{"result": "name, IP, or port was invalid!"})
+	if err := serverAddr.Validate(); err != nil {
+		fmt.Printf("error during input validation: %v\n", err)
+		c.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+		return
 	}
 
-	exists := servers.Remove(serverData.ID())
+	if !serverAddr.IP.Equal(requestAddr.IP) {
+		err := fmt.Errorf("request IP address does not match client IP address")
+
+		fmt.Printf("error during request validation: %v\n", err)
+		c.JSON(http.StatusForbidden, gin.H{"result": err.Error()})
+		return
+	}
+
+	exists := servers.Remove(serverID(serverAddr.String()))
 
 	if !exists {
 		fmt.Println("The server was not found.")
