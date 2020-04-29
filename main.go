@@ -225,69 +225,6 @@ func (r *serverRepository) Prune(threshold time.Duration) {
 // TODO: Move away from global references.
 var servers = newServerRepository()
 
-func verifyIP(ip string) bool {
-	// verify the IP address provided is valid.
-	// This just ensures it's _any_ IPv4 address.
-	addr := net.ParseIP(ip)
-	if addr.To4() == nil {
-		fmt.Fprintln(os.Stdout, ip, "is not a valid IPv4 address")
-		return false
-	}
-	return true
-}
-
-func verifyPort(port string) bool {
-	// Ensure the port is between 1024 and 65535 (applies in TCP and UDP)
-	if n, err := strconv.Atoi(port); err == nil {
-		if 1024 > n || n > 65535 {
-			// TODO: be a little more specific so they know what to do
-			fmt.Fprintln(os.Stdout, port, "is not a valid port number")
-			return false
-		}
-		return true
-	}
-	return false
-}
-
-func cleanName(servername string) string {
-	// Trim whitespace and newlines off ends of name
-	s := strings.TrimSpace(servername)
-	return s
-}
-
-func validateEntry(ctx *gin.Context, jname string, jip string, jport string) bool {
-	// Run simple input validation
-	// ctx == the gin context, for nabbing their source IP
-	// info = the serverInfo map of their JSON request data
-
-	// Your name should be in our required range.
-	// Your IP needs to be a real IPv4 address.
-	// Your jport needs to be in the ephemeral range.
-	// Your incoming source IP must match the IP in your payload.
-
-	// ip == their source client IP
-	// port == source port, only useful for logging/debugging
-	ip, _, _ := net.SplitHostPort(ctx.Request.RemoteAddr)
-
-	fmt.Fprintln(os.Stdout, "Source IP: "+ip+" Payload IP: "+jip)
-	if ip != jip {
-		return false // their source IP != JSON IP value, spoofing/typo case
-	}
-
-	// clean the name string and measure length here.
-	a := cleanName(jname)
-	if 3 > len(a) || len(a) > 32 {
-		fmt.Fprintln(os.Stdout, jname, "must be between 3 and 32 characters.")
-		return false
-	}
-	b := verifyIP(ip)      // their detected source IP
-	c := verifyPort(jport) // their port provided in the payload
-	if !b || !c {
-		return false
-	}
-	return true
-}
-
 // Called by servers to let clients know they exist
 // TODO: You really should be able to have multiple servers on one IP.
 func register(c *gin.Context) {
