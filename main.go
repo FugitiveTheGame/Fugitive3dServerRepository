@@ -24,6 +24,18 @@ import (
 // timeFormatJSON defines the format that we use for time formatting in JSON.
 const timeFormatJSON = time.RFC3339
 
+// port range min and max values for valid server address ports.
+const (
+	portRangeMin = 1024
+	portRangeMax = 65535
+)
+
+// name length min and max values for valid server names.
+const (
+	nameLengthMin = 3
+	nameLengthMax = 32
+)
+
 // jsonTime defines a time.Time with custom marshalling (embedded for method
 // access, rather than aliasing)
 type jsonTime struct {
@@ -54,6 +66,20 @@ func (a *serverAddress) String() string {
 	)
 }
 
+// Validate runs validations on the value and returns an error if the value is
+// invalid for any reason.
+func (a *serverAddress) Validate() error {
+	if a.IP.To4() == nil {
+		return fmt.Errorf("IP is not a valid IPv4 address")
+	}
+
+	if a.Port < portRangeMin || a.Port > portRangeMax {
+		return fmt.Errorf("port is not within the valid port range of %d-%d", portRangeMin, portRangeMax)
+	}
+
+	return nil
+}
+
 // serverID defines the identifier of a particular server.
 type serverID string
 
@@ -70,6 +96,23 @@ type server struct {
 // ID returns the serverID for a server, generated based on its internal data.
 func (s *server) ID() serverID {
 	return serverID(s.serverAddress.String())
+}
+
+// Validate runs validations on the value and returns an error if the value is
+// invalid for any reason.
+func (s *server) Validate() error {
+	if err := s.serverAddress.Validate(); err != nil {
+		return err
+	}
+
+	// TODO: We likely should be cleaning/normalizing inputs when unmarshalling,
+	// rather than during validation.
+	s.Name = strings.TrimSpace(s.Name)
+	if nameLength := len(s.Name); nameLength < nameLengthMin || nameLength > nameLengthMax {
+		return fmt.Errorf("name length must be within range of %d-%d", nameLengthMin, nameLengthMax)
+	}
+
+	return nil
 }
 
 // serverRepository defines the structure for an in-memory server repository.
