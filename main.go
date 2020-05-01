@@ -66,10 +66,10 @@ func initApp(staleThreshold int) http.Handler {
 	srvController := httpapi.NewServerController(repository)
 
 	// Register endpoint handlers
-	router.GET("/getip", httpapi.HandleGetIP)
-	router.GET("/list", srvController.HandleList)
-	router.POST("/register", srvController.HandleRegister)
-	router.DELETE("/remove", srvController.HandleRemove)
+	router.GET("/reflection/ip", httpapi.HandleGetIP)
+	router.GET("/servers", srvController.HandleList)
+	router.PUT("/servers/:server_id", srvController.HandleRegister)
+	router.DELETE("/servers/:server_id", srvController.HandleRemove)
 
 	// thread w/locking for the pruning operations
 	go pruneServers(repository, time.Duration(staleThreshold)*time.Second)
