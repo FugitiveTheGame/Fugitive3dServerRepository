@@ -1,4 +1,4 @@
-module Fugitive3dServerRepository
+module github.com/FugitiveTheGame/Fugitive3dServerRepository
 
 go 1.14
 
