@@ -1,9 +1,13 @@
 package httpapi
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"net"
 	"net/http"
 
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
@@ -32,9 +36,9 @@ func (c *ServerController) HandleList(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, serverList)
 }
 
-// HandleRegister is a gin HTTP handler that allows servers to register
-// themselves in the repository.
-func (c *ServerController) HandleRegister(ctx *gin.Context) {
+// HandleRegister is a gin HTTP handler that allows servers to update
+// their registration to keep things fresh
+func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	requestAddr, _ := srvrepo.ParseServerAddress(ctx.Request.RemoteAddr)
 	var serverData srvrepo.Server
 
@@ -88,6 +92,43 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 
 	fmt.Println("New server registered!")
 	ctx.JSON(http.StatusCreated, gin.H{"result": "registered"})
+}
+
+// HandleRegister is a gin HTTP handler that allows servers to register
+// themselves in the repository.
+func (c *ServerController) HandleRegister(ctx *gin.Context) {
+
+	serverAddr, err := srvrepo.ParseServerAddress(ctx.Param("server_id"))
+	if err != nil {
+		// 404, since the ID is a URL param
+		ctx.JSON(http.StatusNotFound, gin.H{"result": "invalid server ID"})
+		return
+	}
+
+
+	destinationAddress, _ := net.ResolveUDPAddr("udp", serverAddr.String())
+	connection, err := net.DialUDP("udp", nil, destinationAddress)
+	defer connection.Close()
+	if err != nil {
+		log.Fatal(err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"result": "Failed to send ping"})
+	}
+
+	var buffer bytes.Buffer
+	buffer.WriteString("ping")
+	for ii := 0; ii < 10; ii++ {
+		connection.Write(buffer.Bytes())
+	}
+
+	readBuff :=  make([]byte, 2048)
+	_, err = bufio.NewReader(connection).Read(readBuff)
+	response := string(readBuff)
+	if response == "pong" {
+		// If we're all good, handle the registration
+		c.HandleRegister(ctx)
+	} else {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"result": "Bad ping response"})
+	}
 }
 
 // HandleRemove is a gin HTTP handler that allows servers to remove themselves

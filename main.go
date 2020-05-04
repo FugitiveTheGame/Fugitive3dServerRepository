@@ -68,7 +68,8 @@ func initApp(staleThreshold int) http.Handler {
 	// Register endpoint handlers
 	router.GET("/reflection/ip", httpapi.HandleGetIP)
 	router.GET("/servers", srvController.HandleList)
-	router.PUT("/servers/:server_id", srvController.HandleRegister)
+	router.POST("/servers/:server_id", srvController.HandleRegister)
+	router.PUT("/servers/:server_id", srvController.HandleUpdate)
 	router.DELETE("/servers/:server_id", srvController.HandleRemove)
 
 	// thread w/locking for the pruning operations
