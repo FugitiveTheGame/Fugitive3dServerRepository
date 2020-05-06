@@ -54,6 +54,13 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 		return
 	}
 
+	// If we have never seen this server, require that they POST first
+	existed, err := c.repository.Has(srvrepo.ServerID(serverAddr.String()))
+	if !existed {
+		ctx.JSON(http.StatusPreconditionRequired, gin.H{"result": "must POST first"})
+		return
+	}
+
 	// Make sure that the provided address is what's set in the data, so that
 	// the server data and ID match.
 	serverData.ServerAddress = serverAddr
@@ -77,7 +84,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 
 	fmt.Println("A server is registering.")
 
-	existed, err := c.repository.Register(serverData)
+	existed, err = c.repository.Register(serverData)
 	if err != nil {
 		fmt.Printf("error registering server: %v\n", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"result": "internal server error"})
