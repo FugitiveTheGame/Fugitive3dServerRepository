@@ -5,13 +5,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
+	"github.com/gin-gonic/gin"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
-
-	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
-	"github.com/gin-gonic/gin"
 )
 
 // ServerController is an HTTP API controller for server resources.
@@ -133,14 +132,51 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		connection.Write(buffer.Bytes())
 	}
 
-	readBuff :=  make([]byte, 2048)
+	readBuff :=  make([]byte, 8)
 	_, err = bufio.NewReader(connection).Read(readBuff)
-	response := string(readBuff)
+	response := string(readBuff[0:4])
+
+	// If we're all good, handle the registration
 	if response == "pong" {
-		// If we're all good, handle the registration
-		c.HandleUpdate(ctx)
+
+		var serverData srvrepo.Server
+		body, _ := ioutil.ReadAll(ctx.Request.Body)
+		if err := json.Unmarshal(body, &serverData); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"result": "invalid request JSON"})
+		}
+
+		// Make sure that the provided address is what's set in the data, so that
+		// the server data and ID match.
+		serverData.ServerAddress = serverAddr
+
+		// Update the last-seen value to "now"
+		serverData.Seen()
+
+		if err := serverData.Validate(); err != nil {
+			fmt.Printf("error during input validation: %v\n", err)
+			ctx.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
+			return
+		}
+
+		requestAddr, _ := srvrepo.ParseServerAddress(ctx.Request.RemoteAddr)
+		if !serverData.IP.Equal(requestAddr.IP) {
+			err := fmt.Errorf("request IP address does not match client IP address")
+
+			fmt.Printf("error during request validation: %v\n", err)
+			ctx.JSON(http.StatusForbidden, gin.H{"result": err.Error()})
+			return
+		}
+
+		existed, err = c.repository.Register(serverData)
+		if err != nil {
+			fmt.Printf("error registering server: %v\n", err)
+			ctx.JSON(http.StatusInternalServerError, gin.H{"result": "internal server error"})
+			return
+		}
+
 	} else {
-		ctx.JSON(http.StatusNotAcceptable, gin.H{"result": "Bad ping response: " + response})
+		fmt.Printf("error registering server, bad ping response: %s\n", response)
+		ctx.JSON(http.StatusNotAcceptable, gin.H{"result": "Bad ping response"})
 	}
 }
 
