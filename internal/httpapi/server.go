@@ -95,9 +95,9 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 }
 
 // HandleRegister is a gin HTTP handler that allows servers to register
-// themselves in the repository.
+// themselves in the repository. This call will also dial back to the port
+// being registered and confirm that the port is accessible.
 func (c *ServerController) HandleRegister(ctx *gin.Context) {
-
 	serverAddr, err := srvrepo.ParseServerAddress(ctx.Param("server_id"))
 	if err != nil {
 		// 404, since the ID is a URL param
@@ -105,13 +105,19 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		return
 	}
 
+	// If we have already seen this server, just update it
+	existed, err := c.repository.Has(srvrepo.ServerID(serverAddr.String()))
+	if existed {
+		c.HandleUpdate(ctx)
+		return
+	}
 
 	destinationAddress, _ := net.ResolveUDPAddr("udp", serverAddr.String())
 	connection, err := net.DialUDP("udp", nil, destinationAddress)
 	defer connection.Close()
 	if err != nil {
 		log.Fatal(err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"result": "Failed to send ping"})
+		ctx.JSON(http.StatusPreconditionFailed, gin.H{"result": "Repository could not ping you."})
 	}
 
 	var buffer bytes.Buffer
@@ -125,9 +131,9 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 	response := string(readBuff)
 	if response == "pong" {
 		// If we're all good, handle the registration
-		c.HandleRegister(ctx)
+		c.HandleUpdate(ctx)
 	} else {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"result": "Bad ping response"})
+		ctx.JSON(http.StatusNotAcceptable, gin.H{"result": "Bad ping response: " + response})
 	}
 }
 
