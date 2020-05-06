@@ -54,7 +54,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	}
 
 	// If we have never seen this server, require that they POST first
-	existed, err := c.repository.Has(srvrepo.ServerID(serverAddr.String()))
+	existed := c.repository.Has(srvrepo.ServerID(serverAddr.String()))
 	if !existed {
 		ctx.JSON(http.StatusPreconditionRequired, gin.H{"result": "must POST first"})
 		return
@@ -112,7 +112,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 	}
 
 	// If we have already seen this server, just update it
-	existed, err := c.repository.Has(srvrepo.ServerID(serverAddr.String()))
+	existed := c.repository.Has(srvrepo.ServerID(serverAddr.String()))
 	if existed {
 		c.HandleUpdate(ctx)
 		return
@@ -126,17 +126,20 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		ctx.JSON(http.StatusPreconditionFailed, gin.H{"result": "Repository could not ping you."})
 	}
 
+	// We're sending 10 of these because of UDP
+	// Only one actually needs to be received
 	var buffer bytes.Buffer
 	buffer.WriteString("ping")
 	for ii := 0; ii < 10; ii++ {
 		connection.Write(buffer.Bytes())
 	}
 
+	// Wait and read out the response from the game server
 	readBuff :=  make([]byte, 8)
 	_, err = bufio.NewReader(connection).Read(readBuff)
 	response := string(readBuff[0:4])
 
-	// If we're all good, handle the registration
+	// If the response is all good, handle the registration
 	if response == "pong" {
 
 		var serverData srvrepo.Server
