@@ -49,7 +49,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	serverAddr, err := srvrepo.ParseServerAddress(ctx.Param("server_id"))
 	if err != nil {
 		// 404, since the ID is a URL param
-		ctx.JSON(http.StatusNotFound, gin.H{"result": "invalid server ID"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"result": "invalid server ID"})
 		return
 	}
 
