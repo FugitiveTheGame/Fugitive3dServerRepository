@@ -118,6 +118,18 @@ func NewServerRepository() *ServerRepository {
 	}
 }
 
+// Check if an given ServerID already exists in the repository
+func (r *ServerRepository) Has(id ServerID) bool {
+	alreadyExists := false
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	_, alreadyExists = r.servers[id]
+
+	return alreadyExists
+}
+
 // List returns a slice representation of the servers in the repository.
 func (r *ServerRepository) List() []Server {
 	r.mu.RLock()
