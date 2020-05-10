@@ -5,12 +5,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
-	"github.com/gin-gonic/gin"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+
+	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
+	"github.com/gin-gonic/gin"
 )
 
 // ServerController is an HTTP API controller for server resources.
@@ -53,12 +54,11 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 		return
 	}
 
-	// If we have never seen this server, require that they POST first
+	/*
+		Don't check to see if they existed already, just note whether or not they exist.
+		we need to handle the case where they've registered but the repo restarted for some reason.
+	*/
 	existed := c.repository.Has(srvrepo.ServerID(serverAddr.String()))
-	if !existed {
-		ctx.JSON(http.StatusPreconditionRequired, gin.H{"result": "must POST first"})
-		return
-	}
 
 	// Make sure that the provided address is what's set in the data, so that
 	// the server data and ID match.
@@ -68,7 +68,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	serverData.Seen()
 
 	if err := serverData.Validate(); err != nil {
-		fmt.Printf("error during input validation: %v\n", err)
+		log.Printf("error during input validation: %v\n", err)
 		ctx.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
 		return
 	}
@@ -76,27 +76,27 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	if !serverData.IP.Equal(requestAddr.IP) {
 		err := fmt.Errorf("request IP address does not match client IP address")
 
-		fmt.Printf("error during request validation: %v\n", err)
+		log.Printf("error during request validation: %v\n", err)
 		ctx.JSON(http.StatusForbidden, gin.H{"result": err.Error()})
 		return
 	}
 
-	fmt.Println("A server is registering.")
+	log.Printf("A server is attempting registration: %s:%d", requestAddr.IP, requestAddr.Port)
 
 	existed, err = c.repository.Register(serverData)
 	if err != nil {
-		fmt.Printf("error registering server: %v\n", err)
+		log.Printf("error registering server: %v\n", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"result": "internal server error"})
 		return
 	}
 
 	if existed {
-		fmt.Println("This server is already registered.")
+		log.Printf("This server is already registered: %s:%d", requestAddr.IP, requestAddr.Port)
 		ctx.JSON(http.StatusOK, gin.H{"result": "updated"})
 		return
 	}
 
-	fmt.Println("New server registered!")
+	log.Println("New server registered!")
 	ctx.JSON(http.StatusCreated, gin.H{"result": "registered"})
 }
 
@@ -135,7 +135,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 	}
 
 	// Wait and read out the response from the game server
-	readBuff :=  make([]byte, 8)
+	readBuff := make([]byte, 8)
 	_, err = bufio.NewReader(connection).Read(readBuff)
 	response := string(readBuff[0:4])
 
@@ -156,7 +156,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		serverData.Seen()
 
 		if err := serverData.Validate(); err != nil {
-			fmt.Printf("error during input validation: %v\n", err)
+			log.Printf("error during input validation: %v\n", err)
 			ctx.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
 			return
 		}
@@ -165,20 +165,20 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		if !serverData.IP.Equal(requestAddr.IP) {
 			err := fmt.Errorf("request IP address does not match client IP address")
 
-			fmt.Printf("error during request validation: %v\n", err)
+			log.Printf("error during request validation: %v\n", err)
 			ctx.JSON(http.StatusForbidden, gin.H{"result": err.Error()})
 			return
 		}
 
 		existed, err = c.repository.Register(serverData)
 		if err != nil {
-			fmt.Printf("error registering server: %v\n", err)
+			log.Printf("error registering server: %v\n", err)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"result": "internal server error"})
 			return
 		}
 
 	} else {
-		fmt.Printf("error registering server, bad ping response: %s\n", response)
+		log.Printf("error registering server, bad ping response: %s\n", response)
 		ctx.JSON(http.StatusNotAcceptable, gin.H{"result": "Bad ping response"})
 	}
 }
@@ -198,21 +198,21 @@ func (c *ServerController) HandleRemove(ctx *gin.Context) {
 	if !serverAddr.IP.Equal(requestAddr.IP) {
 		err := fmt.Errorf("request IP address does not match client IP address")
 
-		fmt.Printf("error during request validation: %v\n", err)
+		log.Printf("error during request validation: %v\n", err)
 		ctx.JSON(http.StatusForbidden, gin.H{"result": err.Error()})
 		return
 	}
 
-	fmt.Println("A server is being removed.")
+	log.Println("A server is being removed.")
 
 	exists := c.repository.Remove(srvrepo.ServerID(serverAddr.String()))
 
 	if !exists {
-		fmt.Println("The server was not found.")
+		log.Println("The server was not found.")
 		ctx.JSON(http.StatusNotFound, gin.H{"result": "failure"})
 		return
 	}
 
-	fmt.Println("This server is being removed.")
+	log.Println("This server is being removed.")
 	ctx.JSON(200, gin.H{"result": "success"})
 }

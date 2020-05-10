@@ -4,6 +4,7 @@ package srvrepo
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -191,7 +192,7 @@ func (r *ServerRepository) Prune(threshold time.Duration) {
 	for id, srv := range r.servers {
 		if srv.LastSeen.Before(cutoff) {
 			// TODO: Log with an abstraction
-			fmt.Printf("Pruning server: %s\n", id)
+			log.Printf("Pruning server: %s\n", id)
 
 			delete(r.servers, id)
 		}
