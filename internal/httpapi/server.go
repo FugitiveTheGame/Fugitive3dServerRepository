@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
 	"github.com/gin-gonic/gin"
@@ -81,23 +82,19 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 		return
 	}
 
-	log.Printf("A server is attempting registration: %s:%d", requestAddr.IP, requestAddr.Port)
+	log.Printf("A server is attempting update: %s:%d", requestAddr.IP, requestAddr.Port)
 
 	existed, err = c.repository.Register(serverData)
 	if err != nil {
 		log.Printf("error registering server: %v\n", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"result": "internal server error"})
-		return
-	}
-
-	if existed {
+	} else if existed {
 		log.Printf("This server is already registered: %s:%d", requestAddr.IP, requestAddr.Port)
-		ctx.JSON(http.StatusOK, gin.H{"result": "updated"})
-		return
+		ctx.JSON(http.StatusAccepted, gin.H{"result": "updated"})
+	} else {
+		log.Println("New server registered!")
+		ctx.JSON(http.StatusCreated, gin.H{"result": "registered"})
 	}
-
-	log.Println("New server registered!")
-	ctx.JSON(http.StatusCreated, gin.H{"result": "registered"})
 }
 
 // HandleRegister is a gin HTTP handler that allows servers to register
@@ -111,6 +108,8 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		return
 	}
 
+	log.Printf("A server is attempting registration: %s:%d", serverAddr.IP, serverAddr.Port)
+
 	// If we have already seen this server, just update it
 	existed := c.repository.Has(srvrepo.ServerID(serverAddr.String()))
 	if existed {
@@ -120,10 +119,15 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 
 	destinationAddress, _ := net.ResolveUDPAddr("udp", serverAddr.String())
 	connection, err := net.DialUDP("udp", nil, destinationAddress)
-	defer connection.Close()
 	if err != nil {
 		log.Fatal(err)
 		ctx.JSON(http.StatusPreconditionFailed, gin.H{"result": "Repository could not ping you."})
+	}
+	defer connection.Close()
+
+	err = connection.SetReadDeadline(time.Now().Add(time.Second * 5))
+	if err != nil {
+		log.Printf("Error SetReadDeadline")
 	}
 
 	// We're sending 10 of these because of UDP
@@ -137,11 +141,15 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 	// Wait and read out the response from the game server
 	readBuff := make([]byte, 8)
 	_, err = bufio.NewReader(connection).Read(readBuff)
+
+	if err != nil {
+		ctx.JSON(http.StatusGatewayTimeout, gin.H{"result": "no ping response received, is your port not properly forwarded?"})
+		return
+	}
 	response := string(readBuff[0:4])
 
 	// If the response is all good, handle the registration
 	if response == "pong" {
-
 		var serverData srvrepo.Server
 		body, _ := ioutil.ReadAll(ctx.Request.Body)
 		if err := json.Unmarshal(body, &serverData); err != nil {
