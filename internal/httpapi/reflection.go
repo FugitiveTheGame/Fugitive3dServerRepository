@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"fmt"
+	"log"
 	"net"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,7 @@ import (
 func HandleGetIP(ctx *gin.Context) {
 	ip, port, err := net.SplitHostPort(ctx.Request.RemoteAddr)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Println(err.Error())
 		ctx.JSON(500, gin.H{"result": "internal server error"})
 		return
 	}
