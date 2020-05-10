@@ -107,7 +107,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 	serverAddr, err := srvrepo.ParseServerAddress(ctx.Param("server_id"))
 	if err != nil {
 		// 404, since the ID is a URL param
-		ctx.JSON(http.StatusNotFound, gin.H{"result": "invalid server ID"})
+		ctx.JSON(http.StatusNotAcceptable, gin.H{"result": "invalid server ID"})
 		return
 	}
 
@@ -174,9 +174,9 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		if err != nil {
 			log.Printf("error registering server: %v\n", err)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"result": "internal server error"})
-			return
+		} else {
+			ctx.JSON(http.StatusOK, gin.H{"result": "registration complete"})
 		}
-
 	} else {
 		log.Printf("error registering server, bad ping response: %s\n", response)
 		ctx.JSON(http.StatusNotAcceptable, gin.H{"result": "Bad ping response"})
