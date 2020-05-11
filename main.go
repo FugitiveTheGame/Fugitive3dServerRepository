@@ -36,10 +36,12 @@ func main() {
 	var ipAddr string
 	var portNum int
 	var staleThreshold int
+	var logPath string
 
 	flag.StringVar(&ipAddr, "a", "0.0.0.0", "IP address for repository  to listen on")
 	flag.IntVar(&portNum, "p", 8080, "TCP port for repository to listen on")
 	flag.IntVar(&staleThreshold, "s", 30, "Duration (in seconds) before a server is marked stale")
+	flag.StringVar(&logPath, "l", "gin-server.log", "Path to write log file to")
 	flag.Parse()
 
 	serveAddr := net.JoinHostPort(ipAddr, strconv.Itoa(portNum))
@@ -47,14 +49,14 @@ func main() {
 	s := fmt.Sprintf("Server starting with arguments: %s staleThreshold=%v", serveAddr, staleThreshold)
 	fmt.Println(s)
 
-	router := initApp(staleThreshold)
+	router := initApp(staleThreshold, logPath)
 
 	http.ListenAndServe(serveAddr, router)
 }
 
-func initApp(staleThreshold int) http.Handler {
+func initApp(staleThreshold int, logPath string) http.Handler {
 	// Log to a file (overwrite) and stdout
-	f, _ := os.Create("gin-server.log")
+	f, _ := os.Create(logPath)
 
 	// TODO: This is overriding globally. We should likely use a better scope.
 	gin.DefaultWriter = io.MultiWriter(f, os.Stdout)
