@@ -113,13 +113,6 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 
 	glog.Infof("A server is attempting registration: %s:%d", serverAddr.IP, serverAddr.Port)
 
-	// If we have already seen this server, just update it
-	existed := c.repository.Has(srvrepo.ServerID(serverAddr.String()))
-	if existed {
-		c.HandleUpdate(ctx)
-		return
-	}
-
 	destinationAddress, _ := net.ResolveUDPAddr("udp", serverAddr.String())
 	connection, err := net.DialUDP("udp", nil, destinationAddress)
 	if err != nil {
@@ -187,7 +180,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 			return
 		}
 
-		existed, err = c.repository.Register(serverData)
+		_, err = c.repository.Register(serverData)
 		if err != nil {
 			glog.Errorf("error registering server: %v\n", err)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"result": "internal server error"})
