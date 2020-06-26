@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"github.com/golang/glog"
 	ginglog "github.com/szuecs/gin-glog"
 	"net"
@@ -41,15 +40,12 @@ func main() {
 	flag.IntVar(&portNum, "p", 8080, "TCP port for repository to listen on")
 	flag.IntVar(&staleThreshold, "s", 30, "Duration (in seconds) before a server is marked stale")
 	flag.Parse()
-	fmt.Print("Test1")
+
 	serveAddr := net.JoinHostPort(ipAddr, strconv.Itoa(portNum))
 
-	fmt.Print("Test2")
+	router := initApp(staleThreshold)
 
 	glog.Infof("Server starting with arguments: %s staleThreshold=%v", serveAddr, staleThreshold)
-
-	router := initApp(staleThreshold)
-	glog.Info("Router created.")
 
 	http.ListenAndServe(serveAddr, router)
 }
@@ -69,9 +65,9 @@ func initApp(staleThreshold int) http.Handler {
 	router.POST("/servers/:server_id", srvController.HandleRegister)
 	router.PUT("/servers/:server_id", srvController.HandleUpdate)
 	router.DELETE("/servers/:server_id", srvController.HandleRemove)
-	fmt.Print("TestB")
+
 	// thread w/locking for the pruning operations
 	go pruneServers(repository, time.Duration(staleThreshold)*time.Second)
-	fmt.Print("TestA")
+
 	return router
 }
