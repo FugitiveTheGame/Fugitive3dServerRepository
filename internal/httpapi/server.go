@@ -43,7 +43,7 @@ func (c *ServerController) HandleList(ctx *gin.Context) {
 func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	requestAddr, _ := srvrepo.ParseServerAddress(ctx.Request.RemoteAddr)
 	var serverData srvrepo.Server
-	glog.Info("Server Update: HandleUpdate TEST")
+
 	body, _ := ioutil.ReadAll(ctx.Request.Body)
 	if err := json.Unmarshal(body, &serverData); err != nil {
 		glog.Error("Server Update: invalid request JSON")
