@@ -92,10 +92,10 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 		glog.Errorf("error registering server: %v\n", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"result": "internal server error"})
 	} else if existed {
-		glog.Infof("This server is already registered: %s:%d", serverData.IP, serverData.Port)
+		glog.Infof("This server updated: %s:%d", serverData.IP, serverData.Port)
 		ctx.JSON(http.StatusAccepted, gin.H{"result": "updated"})
 	} else {
-		glog.Info("New server registered!")
+		glog.Info("New server registered via update: %s:%d", serverData.IP, serverData.Port)
 		ctx.JSON(http.StatusCreated, gin.H{"result": "registered"})
 	}
 }
