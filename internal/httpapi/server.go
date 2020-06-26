@@ -86,7 +86,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 		return
 	}
 
-	glog.Infof("A server is attempting update: %s:%d", requestAddr.IP, requestAddr.Port)
+	glog.Infof("A server is attempting update: %s:%d", serverData.IP, serverData.Port)
 
 	existed, err = c.repository.Register(serverData)
 	if err != nil {

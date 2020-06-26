@@ -192,7 +192,7 @@ func (r *ServerRepository) Prune(threshold time.Duration) {
 
 	for id, srv := range r.servers {
 		if srv.LastSeen.Before(cutoff) {
-			glog.Info("Pruning server: %s\n", id)
+			glog.Infof("Pruning server: %s\n", id)
 
 			delete(r.servers, id)
 		}
