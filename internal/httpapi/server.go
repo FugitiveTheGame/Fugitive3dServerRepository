@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"time"
@@ -78,7 +77,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	}
 
 	if !serverData.IP.Equal(requestAddr.IP) {
-		log.Print("Server Update: request IP address does not match client IP address")
+		glog.Info("Server Update: request IP address does not match client IP address")
 		err := fmt.Errorf("request IP address does not match client IP address")
 
 		glog.Error("error during request validation: %v\n", err)
@@ -131,8 +130,10 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 
 	err = connection.SetReadDeadline(time.Now().Add(time.Second * 5))
 	if err != nil {
-		log.Printf("Error SetReadDeadline")
+		glog.Error("Error SetReadDeadline")
 	}
+
+	glog.Info("Pinging new server...")
 
 	// We're sending 10 of these because of UDP
 	// Only one actually needs to be received
@@ -141,6 +142,8 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 	for ii := 0; ii < 10; ii++ {
 		connection.Write(buffer.Bytes())
 	}
+
+	glog.Info("Waiting for reponse...")
 
 	// Wait and read out the response from the game server
 	readBuff := make([]byte, 8)
@@ -151,6 +154,8 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		return
 	}
 	response := string(readBuff[0:4])
+
+	glog.Infof("Response received: '%s'", response)
 
 	// If the response is all good, handle the registration
 	if response == "pong" {
@@ -168,7 +173,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		serverData.Seen()
 
 		if err := serverData.Validate(); err != nil {
-			log.Printf("error during input validation: %v\n", err)
+			glog.Errorf("error during input validation: %v\n", err)
 			ctx.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
 			return
 		}
@@ -177,20 +182,20 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		if !serverData.IP.Equal(requestAddr.IP) {
 			err := fmt.Errorf("request IP address does not match client IP address")
 
-			log.Printf("error during request validation: %v\n", err)
+			glog.Errorf("error during request validation: %v\n", err)
 			ctx.JSON(http.StatusForbidden, gin.H{"result": err.Error()})
 			return
 		}
 
 		existed, err = c.repository.Register(serverData)
 		if err != nil {
-			log.Printf("error registering server: %v\n", err)
+			glog.Errorf("error registering server: %v\n", err)
 			ctx.JSON(http.StatusInternalServerError, gin.H{"result": "internal server error"})
 		} else {
 			ctx.JSON(http.StatusOK, gin.H{"result": "registration complete"})
 		}
 	} else {
-		log.Printf("error registering server, bad ping response: %s\n", response)
+		glog.Errorf("error registering server, bad ping response: %s\n", response)
 		ctx.JSON(http.StatusNotAcceptable, gin.H{"result": "Bad ping response"})
 	}
 }
@@ -202,6 +207,7 @@ func (c *ServerController) HandleRemove(ctx *gin.Context) {
 
 	serverAddr, err := srvrepo.ParseServerAddress(ctx.Param("server_id"))
 	if err != nil {
+		glog.Errorf("Invalid server ID: %v", err)
 		// 404, since the ID is a URL param
 		ctx.JSON(http.StatusNotFound, gin.H{"result": "invalid server ID"})
 		return
@@ -210,21 +216,21 @@ func (c *ServerController) HandleRemove(ctx *gin.Context) {
 	if !serverAddr.IP.Equal(requestAddr.IP) {
 		err := fmt.Errorf("request IP address does not match client IP address")
 
-		log.Printf("error during request validation: %v\n", err)
+		glog.Errorf("error during request validation: %v", err)
 		ctx.JSON(http.StatusForbidden, gin.H{"result": err.Error()})
 		return
 	}
 
-	log.Println("A server is being removed.")
+	glog.Info("A server is being removed.")
 
 	exists := c.repository.Remove(srvrepo.ServerID(serverAddr.String()))
 
 	if !exists {
-		log.Println("The server was not found.")
+		glog.Warning("The server was not found.")
 		ctx.JSON(http.StatusNotFound, gin.H{"result": "failure"})
 		return
 	}
 
-	log.Println("This server is being removed.")
+	glog.Infof("This server is being removed: %s", serverAddr.String())
 	ctx.JSON(200, gin.H{"result": "success"})
 }
