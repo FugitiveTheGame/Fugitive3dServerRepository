@@ -42,14 +42,16 @@ func (c *ServerController) HandleList(ctx *gin.Context) {
 func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	requestAddr, _ := srvrepo.ParseServerAddress(ctx.Request.RemoteAddr)
 	var serverData srvrepo.Server
-
+	log.Print("Server Update: HandleUpdate TEST")
 	body, _ := ioutil.ReadAll(ctx.Request.Body)
 	if err := json.Unmarshal(body, &serverData); err != nil {
+		log.Print("Server Update: invalid request JSON")
 		ctx.JSON(http.StatusBadRequest, gin.H{"result": "invalid request JSON"})
 	}
 
 	serverAddr, err := srvrepo.ParseServerAddress(ctx.Param("server_id"))
 	if err != nil {
+		log.Print("Server Update: invalid server ID")
 		// 404, since the ID is a URL param
 		ctx.JSON(http.StatusBadRequest, gin.H{"result": "invalid server ID"})
 		return
@@ -75,6 +77,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	}
 
 	if !serverData.IP.Equal(requestAddr.IP) {
+		log.Print("Server Update: request IP address does not match client IP address")
 		err := fmt.Errorf("request IP address does not match client IP address")
 
 		log.Printf("error during request validation: %v\n", err)
