@@ -4,7 +4,7 @@ package srvrepo
 
 import (
 	"fmt"
-	"log"
+	"github.com/golang/glog"
 	"net"
 	"strconv"
 	"strings"
@@ -192,8 +192,7 @@ func (r *ServerRepository) Prune(threshold time.Duration) {
 
 	for id, srv := range r.servers {
 		if srv.LastSeen.Before(cutoff) {
-			// TODO: Log with an abstraction
-			log.Printf("Pruning server: %s\n", id)
+			glog.Info("Pruning server: %s\n", id)
 
 			delete(r.servers, id)
 		}

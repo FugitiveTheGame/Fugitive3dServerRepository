@@ -14,6 +14,7 @@ import (
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
+	"github.com/szuecs/gin-glog"
 )
 
 // test it out
@@ -63,6 +64,8 @@ func initApp(staleThreshold int, logPath string) http.Handler {
 
 	router := gin.Default()
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
+	router.Use(ginglog.Logger(3 * time.Second))
+	router.Use(gin.Recovery())
 
 	repository := srvrepo.NewServerRepository()
 	srvController := httpapi.NewServerController(repository)

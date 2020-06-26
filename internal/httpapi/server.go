@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/golang/glog"
 	"io/ioutil"
 	"log"
 	"net"
@@ -42,16 +43,16 @@ func (c *ServerController) HandleList(ctx *gin.Context) {
 func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	requestAddr, _ := srvrepo.ParseServerAddress(ctx.Request.RemoteAddr)
 	var serverData srvrepo.Server
-	log.Print("Server Update: HandleUpdate TEST")
+	glog.Info("Server Update: HandleUpdate TEST")
 	body, _ := ioutil.ReadAll(ctx.Request.Body)
 	if err := json.Unmarshal(body, &serverData); err != nil {
-		log.Print("Server Update: invalid request JSON")
+		glog.Error("Server Update: invalid request JSON")
 		ctx.JSON(http.StatusBadRequest, gin.H{"result": "invalid request JSON"})
 	}
 
 	serverAddr, err := srvrepo.ParseServerAddress(ctx.Param("server_id"))
 	if err != nil {
-		log.Print("Server Update: invalid server ID")
+		glog.Error("Server Update: invalid server ID")
 		// 404, since the ID is a URL param
 		ctx.JSON(http.StatusBadRequest, gin.H{"result": "invalid server ID"})
 		return
@@ -71,7 +72,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	serverData.Seen()
 
 	if err := serverData.Validate(); err != nil {
-		log.Printf("error during input validation: %v\n", err)
+		glog.Error("error during input validation: %v\n", err)
 		ctx.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
 		return
 	}
@@ -80,22 +81,22 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 		log.Print("Server Update: request IP address does not match client IP address")
 		err := fmt.Errorf("request IP address does not match client IP address")
 
-		log.Printf("error during request validation: %v\n", err)
+		glog.Error("error during request validation: %v\n", err)
 		ctx.JSON(http.StatusForbidden, gin.H{"result": err.Error()})
 		return
 	}
 
-	log.Printf("A server is attempting update: %s:%d", requestAddr.IP, requestAddr.Port)
+	glog.Infof("A server is attempting update: %s:%d", requestAddr.IP, requestAddr.Port)
 
 	existed, err = c.repository.Register(serverData)
 	if err != nil {
-		log.Printf("error registering server: %v\n", err)
+		glog.Errorf("error registering server: %v\n", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"result": "internal server error"})
 	} else if existed {
-		log.Printf("This server is already registered: %s:%d", requestAddr.IP, requestAddr.Port)
+		glog.Infof("This server is already registered: %s:%d", requestAddr.IP, requestAddr.Port)
 		ctx.JSON(http.StatusAccepted, gin.H{"result": "updated"})
 	} else {
-		log.Println("New server registered!")
+		glog.Info("New server registered!")
 		ctx.JSON(http.StatusCreated, gin.H{"result": "registered"})
 	}
 }
@@ -111,7 +112,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		return
 	}
 
-	log.Printf("A server is attempting registration: %s:%d", serverAddr.IP, serverAddr.Port)
+	glog.Infof("A server is attempting registration: %s:%d", serverAddr.IP, serverAddr.Port)
 
 	// If we have already seen this server, just update it
 	existed := c.repository.Has(srvrepo.ServerID(serverAddr.String()))
@@ -123,7 +124,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 	destinationAddress, _ := net.ResolveUDPAddr("udp", serverAddr.String())
 	connection, err := net.DialUDP("udp", nil, destinationAddress)
 	if err != nil {
-		log.Fatal(err)
+		glog.Fatal(err)
 		ctx.JSON(http.StatusPreconditionFailed, gin.H{"result": "Repository could not ping you."})
 	}
 	defer connection.Close()

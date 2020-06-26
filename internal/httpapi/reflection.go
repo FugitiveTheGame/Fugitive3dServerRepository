@@ -1,8 +1,7 @@
 package httpapi
 
 import (
-	"fmt"
-	"log"
+	"github.com/golang/glog"
 	"net"
 
 	"github.com/gin-gonic/gin"
@@ -13,12 +12,12 @@ import (
 func HandleGetIP(ctx *gin.Context) {
 	ip, port, err := net.SplitHostPort(ctx.Request.RemoteAddr)
 	if err != nil {
-		log.Println(err.Error())
+		glog.Error(err.Error())
 		ctx.JSON(500, gin.H{"result": "internal server error"})
 		return
 	}
 
-	fmt.Println("Incoming request /getip:", ip+":"+port)
+	glog.Info("Incoming request /getip:" + ip + ":" + port)
 	// Only return the IP, even though we have their source ephemeral port.
 	ctx.JSON(200, gin.H{"ip": ip})
 }
