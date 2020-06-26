@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"github.com/golang/glog"
 	ginglog "github.com/szuecs/gin-glog"
 	"net"
@@ -43,9 +42,8 @@ func main() {
 	flag.Parse()
 
 	serveAddr := net.JoinHostPort(ipAddr, strconv.Itoa(portNum))
-
-	s := fmt.Sprintf("Server starting with arguments: %s staleThreshold=%v", serveAddr, staleThreshold)
-	fmt.Println(s)
+	
+	glog.Infof("Server starting with arguments: %s staleThreshold=%v", serveAddr, staleThreshold)
 
 	router := initApp(staleThreshold)
 	glog.Info("Router created.")
