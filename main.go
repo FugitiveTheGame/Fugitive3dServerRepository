@@ -3,10 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
+	"github.com/golang/glog"
+	ginglog "github.com/szuecs/gin-glog"
 	"net"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -14,7 +14,6 @@ import (
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
-	"github.com/szuecs/gin-glog"
 )
 
 // test it out
@@ -37,12 +36,10 @@ func main() {
 	var ipAddr string
 	var portNum int
 	var staleThreshold int
-	var logPath string
 
 	flag.StringVar(&ipAddr, "a", "0.0.0.0", "IP address for repository  to listen on")
 	flag.IntVar(&portNum, "p", 8080, "TCP port for repository to listen on")
 	flag.IntVar(&staleThreshold, "s", 30, "Duration (in seconds) before a server is marked stale")
-	flag.StringVar(&logPath, "l", "gin-server.log", "Path to write log file to")
 	flag.Parse()
 
 	serveAddr := net.JoinHostPort(ipAddr, strconv.Itoa(portNum))
@@ -50,22 +47,17 @@ func main() {
 	s := fmt.Sprintf("Server starting with arguments: %s staleThreshold=%v", serveAddr, staleThreshold)
 	fmt.Println(s)
 
-	router := initApp(staleThreshold, logPath)
+	router := initApp(staleThreshold)
+	glog.Info("Router created.")
 
 	http.ListenAndServe(serveAddr, router)
 }
 
-func initApp(staleThreshold int, logPath string) http.Handler {
-	// Log to a file (overwrite) and stdout
-	f, _ := os.Create(logPath)
-
-	// TODO: This is overriding globally. We should likely use a better scope.
-	gin.DefaultWriter = io.MultiWriter(f, os.Stdout)
-
-	router := gin.Default()
-	router.Use(gzip.Gzip(gzip.DefaultCompression))
+func initApp(staleThreshold int) http.Handler {
+	router := gin.New()
 	router.Use(ginglog.Logger(3 * time.Second))
 	router.Use(gin.Recovery())
+	router.Use(gzip.Gzip(gzip.DefaultCompression))
 
 	repository := srvrepo.NewServerRepository()
 	srvController := httpapi.NewServerController(repository)
