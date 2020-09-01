@@ -18,6 +18,8 @@ type Server struct {
 
 	Name        string `json:"name"`
 	GameVersion int    `json:"game_version"`
+	CurrentPlayers int    `json:"current_players"`
+	MaxPlayers int    `json:"max_players"`
 	IsJoinable bool		`json:"is_joinable"`
 
 	LastSeen jsonTime `json:"last_seen"`
