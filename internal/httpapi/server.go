@@ -47,6 +47,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	if err := json.Unmarshal(body, &serverData); err != nil {
 		glog.Error("Server Update: invalid request JSON")
 		ctx.JSON(http.StatusBadRequest, gin.H{"result": "invalid request JSON"})
+		return
 	}
 
 	serverAddr, err := srvrepo.ParseServerAddress(ctx.Param("server_id"))
@@ -71,7 +72,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	serverData.Seen()
 
 	if err := serverData.Validate(); err != nil {
-		glog.Error("error during input validation: %v\n", err)
+		glog.Errorf("error during input validation: %v\n", err)
 		ctx.JSON(http.StatusBadRequest, gin.H{"result": err.Error()})
 		return
 	}
@@ -80,7 +81,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 		glog.Info("Server Update: request IP address does not match client IP address")
 		err := fmt.Errorf("request IP address does not match client IP address")
 
-		glog.Error("error during request validation: %v\n", err)
+		glog.Errorf("error during request validation: %v\n", err)
 		ctx.JSON(http.StatusForbidden, gin.H{"result": err.Error()})
 		return
 	}
@@ -95,7 +96,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 		glog.Infof("This server updated: %s:%d", serverData.IP, serverData.Port)
 		ctx.JSON(http.StatusAccepted, gin.H{"result": "updated"})
 	} else {
-		glog.Info("New server registered via update: %s:%d", serverData.IP, serverData.Port)
+		glog.Infof("New server registered via update: %s:%d", serverData.IP, serverData.Port)
 		ctx.JSON(http.StatusCreated, gin.H{"result": "registered"})
 	}
 }
@@ -116,8 +117,9 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 	destinationAddress, _ := net.ResolveUDPAddr("udp", serverAddr.String())
 	connection, err := net.DialUDP("udp", nil, destinationAddress)
 	if err != nil {
-		glog.Fatal(err)
+		glog.Errorf("error dialing server for ping: %v", err)
 		ctx.JSON(http.StatusPreconditionFailed, gin.H{"result": "Repository could not ping you."})
+		return
 	}
 	defer connection.Close()
 
@@ -156,6 +158,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 		body, _ := ioutil.ReadAll(ctx.Request.Body)
 		if err := json.Unmarshal(body, &serverData); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"result": "invalid request JSON"})
+			return
 		}
 
 		// Make sure that the provided address is what's set in the data, so that
