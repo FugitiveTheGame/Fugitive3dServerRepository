@@ -11,6 +11,10 @@ threshold (30 seconds by default, set with `-s`).
 
 Go 1.26 or newer.
 
+Build releases with a current Go patch release rather than the minimum. The `go` directive is a
+floor, and the oldest patch of a given minor version carries standard library advisories that
+later patches fix.
+
 ## Running
 
 ```

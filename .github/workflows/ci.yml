@@ -18,11 +18,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # go-version-file tracks the go directive, so the toolchain follows
       # go.mod instead of drifting from it.
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -53,11 +53,16 @@ jobs:
   govulncheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      # Deliberately not go-version-file here. The go directive is a floor, so
+      # it pins the oldest patch release of that minor version, and govulncheck
+      # reports the toolchain's own standard library: scanning against the floor
+      # reports stdlib CVEs that were fixed in later patches. Scan with a current
+      # toolchain, which is what releases should be built with.
+      - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version: stable
           cache: true
 
       # Reports only vulnerabilities this code actually reaches, so an
