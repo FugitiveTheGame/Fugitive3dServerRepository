@@ -40,7 +40,7 @@ func (c *ServerController) HandleList(ctx *gin.Context) {
 // HandleRegister is a gin HTTP handler that allows servers to update
 // their registration to keep things fresh
 func (c *ServerController) HandleUpdate(ctx *gin.Context) {
-	requestAddr, _ := srvrepo.ParseServerAddress(ctx.Request.RemoteAddr)
+	requestIP := clientIP(ctx)
 	var serverData srvrepo.Server
 
 	body, _ := io.ReadAll(ctx.Request.Body)
@@ -77,7 +77,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 		return
 	}
 
-	if !serverData.IP.Equal(requestAddr.IP) {
+	if !serverData.IP.Equal(requestIP) {
 		glog.Info("Server Update: request IP address does not match client IP address")
 		err := fmt.Errorf("request IP address does not match client IP address")
 
@@ -174,8 +174,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 			return
 		}
 
-		requestAddr, _ := srvrepo.ParseServerAddress(ctx.Request.RemoteAddr)
-		if !serverData.IP.Equal(requestAddr.IP) {
+		if !serverData.IP.Equal(clientIP(ctx)) {
 			err := fmt.Errorf("request IP address does not match client IP address")
 
 			glog.Errorf("error during request validation: %v\n", err)
@@ -199,7 +198,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 // HandleRemove is a gin HTTP handler that allows servers to remove themselves
 // from the repository.
 func (c *ServerController) HandleRemove(ctx *gin.Context) {
-	requestAddr, _ := srvrepo.ParseServerAddress(ctx.Request.RemoteAddr)
+	requestIP := clientIP(ctx)
 
 	serverAddr, err := srvrepo.ParseServerAddress(ctx.Param("server_id"))
 	if err != nil {
@@ -209,7 +208,7 @@ func (c *ServerController) HandleRemove(ctx *gin.Context) {
 		return
 	}
 
-	if !serverAddr.IP.Equal(requestAddr.IP) {
+	if !serverAddr.IP.Equal(requestIP) {
 		err := fmt.Errorf("request IP address does not match client IP address")
 
 		glog.Errorf("error during request validation: %v", err)

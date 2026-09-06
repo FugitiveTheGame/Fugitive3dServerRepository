@@ -137,3 +137,28 @@ Deregisters a server.
 - `name` is trimmed of surrounding whitespace and must then be 3-32 characters.
 - Every mutating call must originate from the IP it is registering, updating, or
   removing; this is the only authentication in the system.
+
+## Running behind a reverse proxy
+
+Because a caller's source IP is the only authentication, the address the service
+sees has to be the game server's own. A forwarding header is honoured only when
+the connection comes from `127.0.0.1` or `::1`, on the assumption that a reverse
+proxy runs on the same host; the same header from anywhere else is ignored, since
+believing it would let anyone claim another server's address and hijack or
+deregister its listing.
+
+A proxy must therefore set `X-Forwarded-For`, and must not be reachable in a way
+that lets a client choose that header itself:
+
+```nginx
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
+
+To verify, call `/reflection/ip` from outside the host and confirm it returns the
+caller's public address rather than `127.0.0.1`. If it returns `127.0.0.1`, every
+registration will be rejected with a 403 while `/servers` keeps answering, so the
+service looks healthy from the outside while the browser stays empty.
+
+If the proxy runs on a different host, `trustedProxies` in
+`internal/httpapi/router.go` has to be changed to match; widening it to all
+addresses reintroduces the hijack.

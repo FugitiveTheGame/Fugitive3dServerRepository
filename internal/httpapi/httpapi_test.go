@@ -34,26 +34,35 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// newTestRouter mirrors the route table wired up in main.initApp, which is not
-// importable from here.
+// newTestRouter builds the same router main does, so the route table, the
+// middleware chain and the trusted-proxy configuration are the real ones.
 func newTestRouter() (*gin.Engine, *srvrepo.ServerRepository) {
 	repository := srvrepo.NewServerRepository()
-	controller := NewServerController(repository)
 
-	router := gin.New()
-	router.GET("/reflection/ip", HandleGetIP)
-	router.GET("/servers", controller.HandleList)
-	router.POST("/servers/:server_id", controller.HandleRegister)
-	router.PUT("/servers/:server_id", controller.HandleUpdate)
-	router.DELETE("/servers/:server_id", controller.HandleRemove)
+	router, err := NewRouter(repository)
+	if err != nil {
+		// trustedProxies is a package-level constant list, so this cannot fail
+		// without a programming error.
+		panic(err)
+	}
 
 	return router, repository
 }
 
 func doRequest(router http.Handler, method, target, remoteAddr, body string) *httptest.ResponseRecorder {
+	return doRequestWithHeaders(router, method, target, remoteAddr, body, nil)
+}
+
+// doRequestWithHeaders sends a request with extra headers, for the forwarding
+// headers a reverse proxy would add.
+func doRequestWithHeaders(router http.Handler, method, target, remoteAddr, body string, headers map[string]string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, target, strings.NewReader(body))
 	request.RemoteAddr = remoteAddr
 	request.Header.Set("Content-Type", "application/json")
+
+	for name, value := range headers {
+		request.Header.Set(name, value)
+	}
 
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)

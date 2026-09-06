@@ -44,7 +44,7 @@ The identity of a server *is* its address. `ServerID` is the string `ip:port`, s
 
 Three invariants worth keeping in mind before changing handler logic:
 
-1. **Source-IP binding.** Every mutating handler compares the request's `RemoteAddr` IP against the address in the URL/body and returns 403 on mismatch. This is the only authentication in the system: a server can only touch its own record.
+1. **Source-IP binding.** Every mutating handler compares the caller's address against the address in the URL/body and returns 403 on mismatch. This is the only authentication in the system: a server can only touch its own record. The address comes from `clientIP` in `internal/httpapi/router.go`, which reads a forwarding header only when the immediate peer is in `trustedProxies` (loopback only). That list is a security boundary: gin trusts every proxy by default, and with that default a spoofed `X-Forwarded-For` hijacks or deregisters any listing. `internal/httpapi/proxy_test.go` covers it.
 2. **POST proves reachability, PUT does not.** `HandleRegister` (POST) dials UDP back to the registering address, blasts 10 `"ping"` datagrams (UDP is lossy, only one needs to land), and waits up to 5s for `"pong"`. That is how the repository confirms the player actually forwarded their port before advertising them. `HandleUpdate` (PUT) is the cheap heartbeat path and skips the ping entirely.
 3. **PUT must register unknown servers, never 404.** The store is in-memory, so a repository restart silently drops every registration while game servers keep heartbeating. PUT therefore upserts: 202 for an existing record, 201 for one it had to recreate. See commit `17e2154` ("Registration must always continue"); do not "fix" this into a 404.
 
@@ -80,7 +80,7 @@ to exclude them; only `nomsgpack` and the JSON-codec tags exist.
 ## Quirks worth knowing
 
 - `initApp` selects gin's release mode unless `GIN_MODE` is already set in the environment, so the route dump and debug warnings stay out of production logs while `GIN_MODE=debug` still brings them back for troubleshooting.
-- The handler tests build their own router in `newTestRouter` because `initApp` lives in `package main` and cannot be imported. A new route has to be added in both places or it ships untested.
+- The router is built by `httpapi.NewRouter`, which `main.initApp` and the tests both call, so routes, middleware and trusted proxies cannot drift between production and tests.
 - `go vet ./...` is currently clean. It catches the `glog.Error`/`glog.Info` vs `Errorf`/`Infof` mistake, which this codebase has had several times: the non-`f` variants concatenate their arguments, so a format string passed to them is logged literally.
 - The same error returns a different status per handler: an unparseable `:server_id` is 406 on POST, 400 on PUT, and 404 on DELETE. `README.md` documents this faithfully rather than pretending it is consistent, because the shipped game client may match on these codes.
 

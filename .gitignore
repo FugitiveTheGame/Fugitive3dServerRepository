@@ -19,3 +19,6 @@ build/
 
 # Jetbrains
 .idea/*
+
+# Deployment handoff notes, kept out of this public repo
+deploy/HYDRA.md

@@ -10,7 +10,6 @@ import (
 
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/internal/httpapi"
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
-	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 )
@@ -56,38 +55,37 @@ func main() {
 
 	serveAddr := net.JoinHostPort(ipAddr, strconv.Itoa(portNum))
 
-	router := initApp(staleThreshold)
+	router, err := initApp(staleThreshold)
+	if err != nil {
+		glog.Exitf("could not start: %v", err)
+	}
 
 	glog.Infof("Server starting with arguments: %s staleThreshold=%v", serveAddr, staleThreshold)
 
-	http.ListenAndServe(serveAddr, router)
+	// ListenAndServe only returns on failure. Reporting it matters on a shared
+	// host, where a port conflict would otherwise look like a clean exit.
+	if err := http.ListenAndServe(serveAddr, router); err != nil {
+		glog.Exitf("server stopped: %v", err)
+	}
 }
 
-func initApp(staleThreshold int) http.Handler {
+func initApp(staleThreshold int) (http.Handler, error) {
 	// Release mode unless the environment asks for something else, so the
 	// route dump and debug warnings stay out of production logs.
 	if _, ok := os.LookupEnv(gin.EnvGinMode); !ok {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	router := gin.New()
-	router.Use(httpapi.Logger())
-	router.Use(gin.Recovery())
-	router.Use(gzip.Gzip(gzip.DefaultCompression))
-
 	repository := srvrepo.NewServerRepository()
-	srvController := httpapi.NewServerController(repository)
 
-	// Register endpoint handlers
-	router.GET("/reflection/ip", httpapi.HandleGetIP)
-	router.GET("/servers", srvController.HandleList)
-	router.POST("/servers/:server_id", srvController.HandleRegister)
-	router.PUT("/servers/:server_id", srvController.HandleUpdate)
-	router.DELETE("/servers/:server_id", srvController.HandleRemove)
+	router, err := httpapi.NewRouter(repository)
+	if err != nil {
+		return nil, err
+	}
 
 	// thread w/locking for the pruning operations
 	go pruneServers(repository, time.Duration(staleThreshold)*time.Second)
 	go flushLogs(logFlushInterval)
 
-	return router
+	return router, nil
 }
