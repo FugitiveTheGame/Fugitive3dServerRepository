@@ -18,9 +18,11 @@ go run . -p 8080 -s 30 -logtostderr
 ```
 
 The concurrency tests are written to be run under `-race`, which needs `CGO_ENABLED=1`
-and a C compiler; without one they still pass but detect nothing. The full suite takes
-about 5 seconds because `TestHandleRegisterUnreachableServer` waits out the real ping
-deadline; `-short` brings it under 2.
+and a C compiler; without one they still pass but detect nothing. A Windows development
+machine typically has no C compiler, so `.github/workflows/ci.yml` runs the suite under
+`-race` on Linux for every push and pull request, along with gofmt, vet, and govulncheck.
+The full suite takes about 5 seconds because `TestHandleRegisterUnreachableServer` waits
+out the real ping deadline; `-short` brings it under 2.
 
 Server flags (`main.go`): `-a` listen IP (default `0.0.0.0`), `-p` port (default `8080`), `-s` stale threshold in seconds (default `30`). glog contributes its own flags to the same `flag` set, so `-logtostderr` and `-log_dir=<path>` are accepted on the command line too; without one of them glog writes to the OS temp dir.
 
