@@ -9,7 +9,7 @@ threshold (30 seconds by default, set with `-s`).
 
 ## Requirements
 
-Go 1.25 or newer.
+Go 1.26 or newer.
 
 ## Running
 

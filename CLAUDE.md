@@ -60,8 +60,9 @@ Freshness is a background sweep, not a per-request check: `pruneServers` ticks a
 
 ## Dependencies
 
-`go.mod` requires Go 1.25.0, which is the floor gin and gin-contrib/gzip impose rather than a
-choice of this project; it builds on any newer toolchain. There are three direct dependencies:
+`go.mod` requires Go 1.26.0, which is a floor the dependencies impose rather than a choice of this
+project: gin and gin-contrib/gzip need 1.25, and golang.org/x/crypto raises it to 1.26. It builds
+on any newer toolchain. There are three direct dependencies:
 gin, gin-contrib/gzip, and glog.
 
 Request logging is `httpapi.Logger` in `internal/httpapi/logger.go`, not a library. It replaced
