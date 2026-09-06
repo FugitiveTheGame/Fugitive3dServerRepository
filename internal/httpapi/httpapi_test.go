@@ -3,7 +3,6 @@ package httpapi
 import (
 	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,19 +11,27 @@ import (
 
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
 	"github.com/gin-gonic/gin"
+	"github.com/golang/glog"
 )
 
 func TestMain(m *testing.M) {
 	gin.SetMode(gin.TestMode)
 
 	// Keep glog's output out of the test log and out of the system temp root.
-	logDir, err := ioutil.TempDir("", "srvrepo-test-logs")
+	// os.Exit skips deferred calls, so the cleanup is explicit.
+	logDir, err := os.MkdirTemp("", "httpapi-test-logs")
 	if err == nil {
 		flag.Set("log_dir", logDir)
-		defer os.RemoveAll(logDir)
 	}
 
-	os.Exit(m.Run())
+	code := m.Run()
+
+	glog.Flush()
+	if logDir != "" {
+		os.RemoveAll(logDir)
+	}
+
+	os.Exit(code)
 }
 
 // newTestRouter mirrors the route table wired up in main.initApp, which is not
@@ -85,7 +92,7 @@ func assertSingleJSONBody(t *testing.T, recorder *httptest.ResponseRecorder) {
 
 	decoder := json.NewDecoder(strings.NewReader(recorder.Body.String()))
 
-	var first interface{}
+	var first any
 	if err := decoder.Decode(&first); err != nil {
 		t.Fatalf("response body is not valid JSON: %v (body: %s)", err, recorder.Body.String())
 	}

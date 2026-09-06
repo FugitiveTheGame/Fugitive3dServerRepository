@@ -1,10 +1,10 @@
 package httpapi
 
 import (
-	"github.com/golang/glog"
 	"net"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang/glog"
 )
 
 // HandleGetIP is a gin HTTP handler that gather's the source IP from an

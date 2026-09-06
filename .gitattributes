@@ -1,0 +1,4 @@
+# The repository stores LF. Without this, core.autocrlf=true checks the working
+# tree out as CRLF, and gofmt then reports every Go file as unformatted, which
+# hides real formatting problems.
+* text=auto eol=lf

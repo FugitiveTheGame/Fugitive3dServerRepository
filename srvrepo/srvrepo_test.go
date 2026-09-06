@@ -2,12 +2,34 @@ package srvrepo
 
 import (
 	"encoding/json"
+	"flag"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/golang/glog"
 )
+
+func TestMain(m *testing.M) {
+	// Keep glog's output out of the system temp root. os.Exit skips deferred
+	// calls, so the cleanup is explicit.
+	logDir, err := os.MkdirTemp("", "srvrepo-test-logs")
+	if err == nil {
+		flag.Set("log_dir", logDir)
+	}
+
+	code := m.Run()
+
+	glog.Flush()
+	if logDir != "" {
+		os.RemoveAll(logDir)
+	}
+
+	os.Exit(code)
+}
 
 func TestParseServerAddress(t *testing.T) {
 	cases := []struct {
@@ -179,12 +201,12 @@ func TestServerMarshalJSON(t *testing.T) {
 		t.Fatalf("json.Marshal returned unexpected error: %v", err)
 	}
 
-	var got map[string]interface{}
+	var got map[string]any
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("json.Unmarshal returned unexpected error: %v", err)
 	}
 
-	want := map[string]interface{}{
+	want := map[string]any{
 		"ip":              "203.0.113.4",
 		"port":            float64(45677),
 		"name":            "a server",
@@ -400,36 +422,36 @@ func TestRepositoryConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 5)
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		srv := newTestServer(t, "203.0.113.4:4567"+string(rune('0'+i)), "a server")
 
 		go func() {
 			defer wg.Done()
-			for n := 0; n < iterations; n++ {
+			for range iterations {
 				repo.Register(srv)
 			}
 		}()
 		go func() {
 			defer wg.Done()
-			for n := 0; n < iterations; n++ {
+			for range iterations {
 				repo.List()
 			}
 		}()
 		go func() {
 			defer wg.Done()
-			for n := 0; n < iterations; n++ {
+			for range iterations {
 				repo.Has(srv.ID())
 			}
 		}()
 		go func() {
 			defer wg.Done()
-			for n := 0; n < iterations; n++ {
+			for range iterations {
 				repo.Remove(srv.ID())
 			}
 		}()
 		go func() {
 			defer wg.Done()
-			for n := 0; n < iterations; n++ {
+			for range iterations {
 				repo.Prune(time.Millisecond)
 			}
 		}()

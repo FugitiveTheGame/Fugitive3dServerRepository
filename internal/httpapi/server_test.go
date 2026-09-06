@@ -93,7 +93,7 @@ func TestHandleList(t *testing.T) {
 	recorder := doRequest(router, http.MethodGet, "/servers", "198.51.100.7:51234", "")
 	assertStatus(t, recorder, http.StatusOK)
 
-	var servers []map[string]interface{}
+	var servers []map[string]any
 	if err := json.Unmarshal(recorder.Body.Bytes(), &servers); err != nil {
 		t.Fatalf("response body is not a JSON array: %v (body: %s)", err, recorder.Body.String())
 	}
@@ -102,7 +102,7 @@ func TestHandleList(t *testing.T) {
 		t.Fatalf("listed %d servers, want 1 (body: %s)", len(servers), recorder.Body.String())
 	}
 
-	for field, want := range map[string]interface{}{
+	for field, want := range map[string]any{
 		"ip":              "203.0.113.4",
 		"port":            float64(45677),
 		"name":            "a server",
@@ -153,7 +153,7 @@ func TestHandleUpdateExistingServer(t *testing.T) {
 
 	listing := doRequest(router, http.MethodGet, "/servers", remoteAddr, "")
 
-	var servers []map[string]interface{}
+	var servers []map[string]any
 	if err := json.Unmarshal(listing.Body.Bytes(), &servers); err != nil {
 		t.Fatalf("response body is not a JSON array: %v (body: %s)", err, listing.Body.String())
 	}
@@ -435,7 +435,7 @@ func TestConcurrentRegistrations(t *testing.T) {
 	const servers = 16
 	done := make(chan struct{}, servers)
 
-	for i := 0; i < servers; i++ {
+	for i := range servers {
 		go func(i int) {
 			defer func() { done <- struct{}{} }()
 
@@ -448,7 +448,7 @@ func TestConcurrentRegistrations(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < servers; i++ {
+	for range servers {
 		<-done
 	}
 

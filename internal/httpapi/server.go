@@ -5,14 +5,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/glog"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"time"
 
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
 	"github.com/gin-gonic/gin"
+	"github.com/golang/glog"
 )
 
 // ServerController is an HTTP API controller for server resources.
@@ -43,7 +43,7 @@ func (c *ServerController) HandleUpdate(ctx *gin.Context) {
 	requestAddr, _ := srvrepo.ParseServerAddress(ctx.Request.RemoteAddr)
 	var serverData srvrepo.Server
 
-	body, _ := ioutil.ReadAll(ctx.Request.Body)
+	body, _ := io.ReadAll(ctx.Request.Body)
 	if err := json.Unmarshal(body, &serverData); err != nil {
 		glog.Error("Server Update: invalid request JSON")
 		ctx.JSON(http.StatusBadRequest, gin.H{"result": "invalid request JSON"})
@@ -134,7 +134,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 	// Only one actually needs to be received
 	var buffer bytes.Buffer
 	buffer.WriteString("ping")
-	for ii := 0; ii < 10; ii++ {
+	for range 10 {
 		connection.Write(buffer.Bytes())
 	}
 
@@ -155,7 +155,7 @@ func (c *ServerController) HandleRegister(ctx *gin.Context) {
 	// If the response is all good, handle the registration
 	if response == "pong" {
 		var serverData srvrepo.Server
-		body, _ := ioutil.ReadAll(ctx.Request.Body)
+		body, _ := io.ReadAll(ctx.Request.Body)
 		if err := json.Unmarshal(body, &serverData); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"result": "invalid request JSON"})
 			return

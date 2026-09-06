@@ -7,6 +7,10 @@ in-game server browser. Registrations are held in memory only and expire: a serv
 that stops sending heartbeats is pruned once it has not been seen for the stale
 threshold (30 seconds by default, set with `-s`).
 
+## Requirements
+
+Go 1.25 or newer.
+
 ## Running
 
 ```

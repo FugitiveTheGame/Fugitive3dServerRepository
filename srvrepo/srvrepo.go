@@ -4,23 +4,24 @@ package srvrepo
 
 import (
 	"fmt"
-	"github.com/golang/glog"
 	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 // Server defines a structure for our server data.
 type Server struct {
 	ServerAddress // embedded to flatten the structure
 
-	Name        string `json:"name"`
-	GameVersion int    `json:"game_version"`
+	Name           string `json:"name"`
+	GameVersion    int    `json:"game_version"`
 	CurrentPlayers int    `json:"current_players"`
-	MaxPlayers int    `json:"max_players"`
-	IsJoinable bool		`json:"is_joinable"`
+	MaxPlayers     int    `json:"max_players"`
+	IsJoinable     bool   `json:"is_joinable"`
 
 	LastSeen jsonTime `json:"last_seen"`
 }
