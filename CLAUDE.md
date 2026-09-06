@@ -11,9 +11,16 @@ The matchmaking / server-browser backend for Fugitive 3D. Game servers register 
 ```bash
 go build ./...
 go vet ./...
-go test ./...            # no test files exist yet
+go test ./...
+go test ./... -short                       # skips the one test that waits out the 5s ping deadline
+go test ./srvrepo/ -run TestRepositoryPrune -v
 go run . -p 8080 -s 30 -logtostderr
 ```
+
+The concurrency tests are written to be run under `-race`, which needs `CGO_ENABLED=1`
+and a C compiler; without one they still pass but detect nothing. The full suite takes
+about 5 seconds because `TestHandleRegisterUnreachableServer` waits out the real ping
+deadline; `-short` brings it under 2.
 
 Server flags (`main.go`): `-a` listen IP (default `0.0.0.0`), `-p` port (default `8080`), `-s` stale threshold in seconds (default `30`). glog contributes its own flags to the same `flag` set, so `-logtostderr` and `-log_dir=<path>` are accepted on the command line too; without one of them glog writes to the OS temp dir.
 
@@ -53,6 +60,7 @@ Freshness is a background sweep, not a per-request check: `pruneServers` ticks a
 
 ## Quirks worth knowing
 
+- The handler tests build their own router in `newTestRouter` because `initApp` lives in `package main` and cannot be imported. A new route has to be added in both places or it ships untested.
 - `go vet ./...` is currently clean. It catches the `glog.Error`/`glog.Info` vs `Errorf`/`Infof` mistake, which this codebase has had several times: the non-`f` variants concatenate their arguments, so a format string passed to them is logged literally.
 - The same error returns a different status per handler: an unparseable `:server_id` is 406 on POST, 400 on PUT, and 404 on DELETE. `README.md` documents this faithfully rather than pretending it is consistent, because the shipped game client may match on these codes.
 
