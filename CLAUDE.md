@@ -61,22 +61,22 @@ Freshness is a background sweep, not a per-request check: `pruneServers` ticks a
 ## Dependencies
 
 `go.mod` requires Go 1.25.0, which is the floor gin and gin-contrib/gzip impose rather than a
-choice of this project; it builds on any newer toolchain. The dependency set is small and current
-except for one piece:
+choice of this project; it builds on any newer toolchain. There are three direct dependencies:
+gin, gin-contrib/gzip, and glog.
 
-- `szuecs/gin-glog` is the gin request-logging middleware and is abandoned: v1.1.1 from 2020 is
-  still the newest release and it predates modules, so it has no `go.mod`. It compiles against gin
-  v1.12 because it only touches stable gin APIs, and it is about sixty lines. It also writes raw
-  ANSI color escapes into every request log line, which is where the `[97;43m` noise in glog's
-  log files comes from. Replacing it with a local middleware would drop the dependency and the
-  escape codes.
-- gin v1.12 links `quic-go/http3` and mongo's BSON codec into the binary whether or not they are
-  used, which is most of the jump from a 12 MB binary on gin 1.6 to 21 MB. There is no build tag
-  to exclude them; only `nomsgpack` and the JSON-codec tags exist.
+Request logging is `httpapi.Logger` in `internal/httpapi/logger.go`, not a library. It replaced
+`szuecs/gin-glog`, which was abandoned at v1.1.1 in 2020, predated modules, and wrote raw ANSI
+color escapes into glog's log files. Successful requests are logged at glog verbosity 2 rather
+than the default, because every registered server heartbeats more often than the stale threshold
+and those lines would bury everything else; run with `-v=2` to see them.
+
+gin v1.12 links `quic-go/http3` and mongo's BSON codec into the binary whether or not they are
+used, which is most of the jump from a 12 MB binary on gin 1.6 to 21 MB. There is no build tag
+to exclude them; only `nomsgpack` and the JSON-codec tags exist.
 
 ## Quirks worth knowing
 
-- `initApp` builds the router with `gin.New()` and never calls `gin.SetMode`, so the server runs in gin's debug mode: it dumps the route table at startup and logs a debug warning. Setting `GIN_MODE=release` in the environment switches it off without a code change.
+- `initApp` selects gin's release mode unless `GIN_MODE` is already set in the environment, so the route dump and debug warnings stay out of production logs while `GIN_MODE=debug` still brings them back for troubleshooting.
 - The handler tests build their own router in `newTestRouter` because `initApp` lives in `package main` and cannot be imported. A new route has to be added in both places or it ships untested.
 - `go vet ./...` is currently clean. It catches the `glog.Error`/`glog.Info` vs `Errorf`/`Infof` mistake, which this codebase has had several times: the non-`f` variants concatenate their arguments, so a format string passed to them is logged literally.
 - The same error returns a different status per handler: an unparseable `:server_id` is 406 on POST, 400 on PUT, and 404 on DELETE. `README.md` documents this faithfully rather than pretending it is consistent, because the shipped game client may match on these codes.

@@ -6,7 +6,6 @@ require (
 	github.com/gin-contrib/gzip v1.2.7
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang/glog v1.2.5
-	github.com/szuecs/gin-glog v1.1.1
 )
 
 require (

@@ -23,7 +23,12 @@ go run . -a 0.0.0.0 -p 8080 -s 30 -logtostderr
 | `-p` | `8080` | TCP port to listen on |
 | `-s` | `30` | Seconds before a server is considered stale and pruned |
 
-Logging is glog, so `-logtostderr` and `-log_dir=<path>` are also accepted.
+Logging is glog, so `-logtostderr` and `-log_dir=<path>` are also accepted. Successful requests
+are not logged at the default verbosity, since every registered server heartbeats continuously;
+pass `-v=2` to see them. Errors and rejections are always logged.
+
+The server runs in gin's release mode unless `GIN_MODE` is set in the environment; `GIN_MODE=debug`
+restores gin's startup route dump and debug warnings.
 
 ## Endpoints
 

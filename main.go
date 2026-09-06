@@ -2,10 +2,9 @@ package main
 
 import (
 	"flag"
-	"github.com/golang/glog"
-	ginglog "github.com/szuecs/gin-glog"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -13,7 +12,13 @@ import (
 	"github.com/FugitiveTheGame/Fugitive3dServerRepository/srvrepo"
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
+	"github.com/golang/glog"
 )
+
+// logFlushInterval is how often glog's buffers are flushed to disk. glog's own
+// daemon only flushes every 30 seconds, which is a long time to wait for a log
+// line while watching a live problem.
+const logFlushInterval = 3 * time.Second
 
 // test it out
 // curl -d '{"name":"special server", "ip":"1.2.3.5", "port":"45677"}' -H "Content-Type: application/json" -X POST localhost:8080/register
@@ -27,6 +32,14 @@ func pruneServers(repository *srvrepo.ServerRepository, threshold time.Duration)
 
 	for range time.Tick(interval) {
 		repository.Prune(threshold)
+	}
+}
+
+// flushLogs flushes glog's buffers on an interval, running via an infinite
+// ticker.
+func flushLogs(interval time.Duration) {
+	for range time.Tick(interval) {
+		glog.Flush()
 	}
 }
 
@@ -51,8 +64,14 @@ func main() {
 }
 
 func initApp(staleThreshold int) http.Handler {
+	// Release mode unless the environment asks for something else, so the
+	// route dump and debug warnings stay out of production logs.
+	if _, ok := os.LookupEnv(gin.EnvGinMode); !ok {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	router := gin.New()
-	router.Use(ginglog.Logger(3 * time.Second))
+	router.Use(httpapi.Logger())
 	router.Use(gin.Recovery())
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 
@@ -68,6 +87,7 @@ func initApp(staleThreshold int) http.Handler {
 
 	// thread w/locking for the pruning operations
 	go pruneServers(repository, time.Duration(staleThreshold)*time.Second)
+	go flushLogs(logFlushInterval)
 
 	return router
 }
