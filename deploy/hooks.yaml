@@ -1,0 +1,27 @@
+- id: fugitive-repo
+  execute-command: /home/fugitive-repo/deploy/redeploy.sh
+  command-working-directory: /home/fugitive-repo/deploy
+  response-message: deploy triggered
+  # false makes webhook answer GitHub immediately and run the deploy in the
+  # background, so a slow build can never hit GitHub's 10s delivery timeout.
+  include-command-output-in-response: false
+  trigger-rule:
+    and:
+      - match:
+          type: payload-hmac-sha256
+          secret: __WEBHOOK_SECRET__
+          parameter:
+            source: header
+            name: X-Hub-Signature-256
+      - match:
+          type: value
+          value: push
+          parameter:
+            source: header
+            name: X-GitHub-Event
+      - match:
+          type: value
+          value: refs/heads/master
+          parameter:
+            source: payload
+            name: ref

@@ -1,0 +1,41 @@
+[Unit]
+Description=Fugitive 3D server repository
+Documentation=https://github.com/FugitiveTheGame/Fugitive3dServerRepository
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=fugitive-repo
+Group=fugitive-repo
+Environment=HOME=/home/fugitive-repo
+
+# Bound to loopback because nginx is the only thing that should reach it. The
+# service's trusted-proxy list is loopback-only to match: a forwarding header
+# is believed only from there, since source IP is the sole authentication.
+#
+# -logtostderr sends glog to the journal. Do not add -v=2 permanently: every
+# registered game server heartbeats continuously and would be logged.
+ExecStart=/home/fugitive-repo/bin/fugitive-repo \
+	-a 127.0.0.1 \
+	-p 8080 \
+	-s 30 \
+	-logtostderr
+
+# Registrations are in-memory and expire after the stale threshold, so a
+# restart costs nothing: live servers re-register on their next heartbeat.
+Restart=always
+RestartSec=5s
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_INET AF_INET6
+ReadWritePaths=/home/fugitive-repo
+
+# ProtectHome is deliberately unset: the binary lives under /home, and enabling
+# it would make ExecStart unreachable.
+
+[Install]
+WantedBy=multi-user.target
