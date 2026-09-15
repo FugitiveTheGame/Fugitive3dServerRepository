@@ -161,4 +161,14 @@ service looks healthy from the outside while the browser stays empty.
 
 If the proxy runs on a different host, `trustedProxies` in
 `internal/httpapi/router.go` has to be changed to match; widening it to all
+
+## 🪨 Dark Rock Studios
+
+[**Dark Rock Studios**](https://darkrock.studio/) is all about building **Free and Open Source Software**.
+
+🐛 Found bugs?  
+💡 Have suggestions?  
+📚 Want to help translate?  
+🎮 Interested in our other apps?  
+👉 Join our community of Open Source enthusiasts on [**Discord**](https://discord.gg/49Kj5mMj6d)!
 addresses reintroduces the hijack.
